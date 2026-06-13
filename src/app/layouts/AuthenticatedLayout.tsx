@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Bell,
@@ -20,6 +21,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { canAccessNavigationItem, navigationItems } from "../../shared/constants/navigation";
+import { getUnreadNotificationCount } from "../../features/notifications/notificationApi";
 
 const iconMap = {
   dashboard: LayoutDashboard,
@@ -44,6 +46,13 @@ export function AuthenticatedLayout() {
   const visibleItems = navigationItems.filter((item) =>
     canAccessNavigationItem(item, roles)
   );
+  const unreadQuery = useQuery({
+    queryFn: getUnreadNotificationCount,
+    queryKey: ["notifications", "unread-count"],
+    refetchInterval: 30_000,
+    retry: 1
+  });
+  const unreadCount = unreadQuery.data ?? 0;
 
   return (
     <div className="app-layout">
@@ -74,8 +83,13 @@ export function AuthenticatedLayout() {
           </div>
           <div className="topbar-actions">
             <Button asChild variant="ghost" size="icon" aria-label="Notifications">
-              <Link to="/notifications">
+              <Link className="notification-button" to="/notifications">
                 <Bell size={18} />
+                {unreadCount > 0 ? (
+                  <span className="notification-badge">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                ) : null}
               </Link>
             </Button>
             <details className="user-menu">

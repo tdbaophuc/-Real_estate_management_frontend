@@ -6,6 +6,7 @@ import { RoleGuard } from "../../shared/auth/RoleGuard";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { RegisterPage } from "../../features/auth/RegisterPage";
+import { NotificationsPage } from "../../features/notifications/NotificationsPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
@@ -41,7 +42,7 @@ export const router = createBrowserRouter([
           { path: "/contracts", element: <PlaceholderPage title="Contracts" /> },
           { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
           { path: "/commissions", element: <PlaceholderPage title="Commissions" /> },
-          { path: "/notifications", element: <PlaceholderPage title="Notifications" /> },
+          { path: "/notifications", element: <NotificationsPage /> },
           { path: "/reports", element: <PlaceholderPage title="Reports" /> },
           { path: "/ai", element: <PlaceholderPage title="AI Assistant" /> },
           {
