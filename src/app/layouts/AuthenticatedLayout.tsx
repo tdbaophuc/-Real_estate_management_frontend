@@ -10,6 +10,7 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
+  Menu,
   ReceiptText,
   ShieldCheck,
   Users
@@ -75,14 +76,25 @@ export function AuthenticatedLayout() {
                 <Bell size={18} />
               </Link>
             </Button>
-            <div className="user-chip">
-              <span>{user?.fullName ?? "Demo User"}</span>
-              <small>{roles.join(", ") || "No role"}</small>
-            </div>
-            <Button variant="secondary" size="sm" onClick={logout}>
-              <LogOut size={16} />
-              Logout
-            </Button>
+            <details className="user-menu">
+              <summary aria-label="User menu">
+                <span className="user-chip">
+                  <span>{user?.fullName ?? "Demo User"}</span>
+                  <small>{roles.join(", ") || "No role"}</small>
+                </span>
+                <Menu size={17} />
+              </summary>
+              <div className="user-menu-panel">
+                <div>
+                  <strong>{user?.fullName ?? "Demo User"}</strong>
+                  <small>{user?.email ?? "No email"}</small>
+                </div>
+                <Button variant="secondary" size="sm" onClick={logout}>
+                  <LogOut size={16} />
+                  Logout
+                </Button>
+              </div>
+            </details>
           </div>
         </header>
         <main className="app-main">
@@ -92,4 +104,3 @@ export function AuthenticatedLayout() {
     </div>
   );
 }
-

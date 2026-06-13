@@ -21,6 +21,11 @@ type ApiAuthConfig = {
   onUnauthorized: () => void;
 };
 
+type RefreshTokenResponse = Partial<AuthSession> & {
+  accessToken: string;
+  expiresIn?: number;
+};
+
 let authConfig: ApiAuthConfig | null = null;
 let refreshPromise: Promise<AuthSession> | null = null;
 
@@ -141,14 +146,15 @@ async function refreshAccessToken() {
     throw normalizeApiError(401, undefined, "Missing refresh token");
   }
 
-  const session = await executeRequest<AuthSession>("/auth/refresh-token", {
+  const session = await executeRequest<RefreshTokenResponse>("/auth/refresh-token", {
     body: { refreshToken },
     method: "POST",
     skipAuth: true,
     skipRefresh: true
   });
   const nextSession = {
-    ...session,
+    accessToken: session.accessToken,
+    expiresInSeconds: session.expiresInSeconds ?? session.expiresIn ?? 0,
     refreshToken: session.refreshToken ?? refreshToken
   };
 

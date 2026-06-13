@@ -17,12 +17,12 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (!isSessionHydrated && !user) {
+  if (!isSessionHydrated) {
     return (
       <div className="centered-state">
         <EmptyState
-          title="Checking session"
-          description="We are confirming your account permissions."
+          title="Checking permissions"
+          description="We are loading the roles for your account."
         />
       </div>
     );

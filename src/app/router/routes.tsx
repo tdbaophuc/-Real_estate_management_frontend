@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthenticatedLayout } from "../layouts/AuthenticatedLayout";
 import { PublicLayout } from "../layouts/PublicLayout";
+import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
 import { RoleGuard } from "../../shared/auth/RoleGuard";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
@@ -20,12 +21,14 @@ export const router = createBrowserRouter([
     ]
   },
   {
-    element: (
-      <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]} />
-    ),
+    element: <ProtectedRoute />,
     children: [
       {
-        element: <AuthenticatedLayout />,
+        element: (
+          <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+            <AuthenticatedLayout />
+          </RoleGuard>
+        ),
         children: [
           { path: "/dashboard", element: <DashboardPage /> },
           { path: "/properties", element: <PlaceholderPage title="Properties" /> },
@@ -61,4 +64,3 @@ export const router = createBrowserRouter([
   },
   { path: "*", element: <Navigate to="/" replace /> }
 ]);
-
