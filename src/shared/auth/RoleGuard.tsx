@@ -10,11 +10,22 @@ type RoleGuardProps = {
 };
 
 export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isSessionHydrated, user } = useAuth();
   const location = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!isSessionHydrated && !user) {
+    return (
+      <div className="centered-state">
+        <EmptyState
+          title="Checking session"
+          description="We are confirming your account permissions."
+        />
+      </div>
+    );
   }
 
   const hasRole = user?.roles.some((role) => allowedRoles.includes(role));
@@ -32,4 +43,3 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
 
   return children ? <>{children}</> : <Outlet />;
 }
-
