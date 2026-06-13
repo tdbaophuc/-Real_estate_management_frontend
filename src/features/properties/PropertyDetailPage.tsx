@@ -7,6 +7,7 @@ import {
   BedDouble,
   Building2,
   CheckCircle2,
+  Edit,
   Home,
   MapPin,
   Ruler,
@@ -196,6 +197,12 @@ export function PropertyDetailPage() {
               <strong>
                 {property.price ? formatCurrency(property.price, property.currency) : "Updating"}
               </strong>
+              <Button asChild variant="secondary" size="sm">
+                <Link to={`/properties/${property.id}/edit`}>
+                  <Edit size={16} />
+                  Edit
+                </Link>
+              </Button>
             </div>
           </div>
           <ImageGallery images={images} />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowUpDown, Bath, BedDouble, Home, MapPin, Ruler, Search } from "lucide-react";
+import { ArrowUpDown, Bath, BedDouble, Home, MapPin, Plus, Ruler, Search } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -231,6 +231,12 @@ export function PropertiesPage() {
           <p className="eyebrow">Properties</p>
           <h2>Property inventory</h2>
         </div>
+        <Button asChild>
+          <Link to="/properties/new">
+            <Plus size={16} />
+            New property
+          </Link>
+        </Button>
       </div>
       <form className="filter-bar property-filter-bar" onSubmit={submitSearch}>
         <Input

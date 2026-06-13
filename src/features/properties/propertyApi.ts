@@ -34,12 +34,16 @@ export type PropertyAddress = {
 export type PropertyRecord = {
   address: PropertyAddress;
   assignedAgent: PropertyPerson | null;
+  assignedAgentId: number | null;
+  availableFrom: string;
   bathrooms: number | null;
   bedrooms: number | null;
   code: string;
   currency: string;
+  description: string;
   direction: string;
   floorArea: number | null;
+  floors: number | null;
   furnitureStatus: string;
   id: number | string;
   images: PropertyImage[];
@@ -47,9 +51,45 @@ export type PropertyRecord = {
   legalStatus: string;
   name: string;
   owner: PropertyPerson | null;
+  ownerId: number | null;
   price: number | null;
+  propertyTypeId: number | null;
   purpose: PropertyPurpose | null;
   status: string;
+};
+
+export type PropertyUpsertRequest = {
+  address: {
+    addressLine?: string;
+    districtId?: number;
+    latitude?: number;
+    longitude?: number;
+    provinceId?: number;
+    street?: string;
+    wardId?: number;
+  };
+  amenities: Array<{
+    amenityId: number;
+    note?: string;
+  }>;
+  assignedAgentId?: number;
+  availableFrom?: string;
+  bathrooms?: number;
+  bedrooms?: number;
+  code: string;
+  currency: string;
+  description?: string;
+  direction?: string;
+  floorArea?: number;
+  floors?: number;
+  furnitureStatus?: string;
+  landArea?: number;
+  legalStatus?: string;
+  name: string;
+  ownerId?: number;
+  price: number;
+  propertyTypeId: number;
+  purpose: PropertyPurpose;
 };
 
 type BackendRecord = Record<string, unknown>;
@@ -179,12 +219,16 @@ function normalizeProperty(property: BackendRecord): PropertyRecord {
   return {
     address: readAddress(property),
     assignedAgent,
+    assignedAgentId: readNumber(property, ["assignedAgentId"]),
+    availableFrom: readString(property, ["availableFrom"]),
     bathrooms: readNumber(property, ["bathrooms"]),
     bedrooms: readNumber(property, ["bedrooms"]),
     code: readString(property, ["code"], String(id || "PROPERTY")),
     currency: readString(property, ["currency"], "VND"),
+    description: readString(property, ["description"]),
     direction: readString(property, ["direction"], "UNKNOWN"),
     floorArea: readNumber(property, ["floorArea", "area"]),
+    floors: readNumber(property, ["floors"]),
     furnitureStatus: readString(property, ["furnitureStatus"], "UNKNOWN"),
     id: id || readString(property, ["code", "name"]),
     images: readImages(property),
@@ -192,7 +236,9 @@ function normalizeProperty(property: BackendRecord): PropertyRecord {
     legalStatus: readString(property, ["legalStatus"], "UNKNOWN"),
     name: readString(property, ["name", "title"], "Untitled property"),
     owner,
+    ownerId: readNumber(property, ["ownerId"]),
     price: readNumber(property, ["price", "askingPrice"]),
+    propertyTypeId: readNumber(property, ["propertyTypeId"]),
     purpose: readPurpose(readString(property, ["purpose"])),
     status: readString(property, ["status"], "DRAFT")
   };
@@ -231,4 +277,14 @@ export function getPropertyImages(propertyId: number | string) {
   return apiClient
     .get<BackendRecord[]>(`/properties/${encodeURIComponent(String(propertyId))}/images`)
     .then((images) => readImages({ images }));
+}
+
+export function createProperty(request: PropertyUpsertRequest) {
+  return apiClient.post<BackendRecord>("/properties", request).then(normalizeProperty);
+}
+
+export function updateProperty(propertyId: number | string, request: PropertyUpsertRequest) {
+  return apiClient
+    .put<BackendRecord>(`/properties/${encodeURIComponent(String(propertyId))}`, request)
+    .then(normalizeProperty);
 }

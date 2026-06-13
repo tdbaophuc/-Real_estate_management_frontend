@@ -9,6 +9,7 @@ import { RegisterPage } from "../../features/auth/RegisterPage";
 import { NotificationsPage } from "../../features/notifications/NotificationsPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
+import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
@@ -41,6 +42,22 @@ export const router = createBrowserRouter([
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
                 <PropertiesPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/properties/new",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <PropertyFormPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/properties/:id/edit",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <PropertyFormPage />
               </RoleGuard>
             )
           },
