@@ -234,6 +234,10 @@ p {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.property-filter-bar {
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 1fr)) auto;
+}
+
 .filter-actions {
   display: flex;
   align-items: end;
@@ -460,6 +464,71 @@ p {
   }
 }
 
+.property-results-header {
+  margin-bottom: 16px;
+}
+
+.property-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.property-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.property-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.property-card-header > span:last-child {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.property-card h3 {
+  margin-bottom: 0;
+}
+
+.property-card strong {
+  font-size: 1.1rem;
+}
+
+.property-card-skeleton {
+  min-height: 240px;
+  border-color: transparent;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.66), transparent),
+    #e8efec;
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.1s linear infinite;
+}
+
+.property-card-mobile {
+  display: none;
+}
+
+.property-table-desktop td strong {
+  display: block;
+}
+
+.property-table-desktop td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .detail-header {
   margin: 22px 0;
 }
@@ -597,6 +666,95 @@ p {
 
 .favorite-listing-side strong {
   font-size: 1.08rem;
+}
+
+.property-price-block,
+.property-person,
+.property-detail-grid div,
+.property-fact-grid div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.property-price-block {
+  min-width: 220px;
+}
+
+.property-price-block span,
+.property-person span,
+.property-detail-grid span,
+.property-fact-grid span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.property-price-block strong {
+  font-size: 1.35rem;
+}
+
+.property-fact-grid,
+.property-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.property-fact-grid svg {
+  color: var(--primary);
+}
+
+.property-side-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.property-person {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.property-person svg {
+  color: var(--primary);
+}
+
+.property-person div {
+  display: grid;
+  gap: 4px;
+}
+
+.property-person small {
+  color: var(--muted);
+}
+
+.workflow-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.workflow-step svg {
+  color: var(--border);
+}
+
+.workflow-step.active {
+  color: var(--primary);
+}
+
+.workflow-step.active svg {
+  color: var(--primary);
 }
 
 .notification-list {
@@ -1043,12 +1201,22 @@ p {
   .favorite-listing-row,
   .detail-grid,
   .dashboard-actions,
+  .property-card-grid,
+  .property-filter-bar,
   .metric-grid {
     grid-template-columns: 1fr;
   }
 
   .listing-filter-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .property-table-desktop {
+    display: none;
+  }
+
+  .property-card-mobile {
+    display: grid;
   }
 }
 
@@ -1068,6 +1236,15 @@ p {
   .filter-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .property-detail-grid,
+  .property-fact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .property-price-block {
+    min-width: 0;
   }
 
   .favorite-listing-side {

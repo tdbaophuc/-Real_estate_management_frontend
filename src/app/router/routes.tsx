@@ -7,6 +7,8 @@ import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { RegisterPage } from "../../features/auth/RegisterPage";
 import { NotificationsPage } from "../../features/notifications/NotificationsPage";
+import { PropertiesPage } from "../../features/properties/PropertiesPage";
+import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
@@ -34,7 +36,22 @@ export const router = createBrowserRouter([
         children: [
           { path: "/dashboard", element: <DashboardPage /> },
           { path: "/favorites", element: <FavoriteListingsPage /> },
-          { path: "/properties", element: <PlaceholderPage title="Properties" /> },
+          {
+            path: "/properties",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <PropertiesPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/properties/:id",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <PropertyDetailPage />
+              </RoleGuard>
+            )
+          },
           { path: "/listings", element: <PlaceholderPage title="Listings" /> },
           { path: "/customers", element: <PlaceholderPage title="Customers" /> },
           { path: "/leads", element: <PlaceholderPage title="Leads" /> },
