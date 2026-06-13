@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Contact,
   FileSignature,
+  Heart,
   Home,
   LayoutDashboard,
   LogOut,
@@ -22,6 +23,7 @@ import { canAccessNavigationItem, navigationItems } from "../../shared/constants
 
 const iconMap = {
   dashboard: LayoutDashboard,
+  favorites: Heart,
   properties: Home,
   listings: Building2,
   customers: Contact,

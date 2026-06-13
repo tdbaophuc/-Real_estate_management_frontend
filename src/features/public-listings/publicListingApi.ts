@@ -33,6 +33,32 @@ export type PublicListing = {
   title: string;
 };
 
+export type ListingAmenity = {
+  id: number | string;
+  name: string;
+  category?: string;
+};
+
+export type ListingAgent = {
+  email?: string;
+  fullName: string;
+  phone?: string;
+};
+
+export type GalleryImage = {
+  alt?: string;
+  id: number | string;
+  url: string;
+};
+
+export type PublicListingDetail = PublicListing & {
+  agent: ListingAgent | null;
+  amenities: ListingAmenity[];
+  description: string;
+  images: GalleryImage[];
+  isFavorite: boolean;
+};
+
 type BackendListing = Record<string, unknown>;
 
 function readString(source: BackendListing, keys: string[], fallback = "") {
@@ -68,6 +94,18 @@ function readNestedRecord(source: BackendListing, key: string) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as BackendListing)
     : null;
+}
+
+function readBoolean(source: BackendListing, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+  }
+
+  return false;
 }
 
 function readAddress(source: BackendListing) {
@@ -108,7 +146,8 @@ function readCoverImage(source: BackendListing) {
     return directImage;
   }
 
-  const images = source.images;
+  const property = readNestedRecord(source, "property");
+  const images = source.images ?? property?.images;
 
   if (Array.isArray(images)) {
     const image = images.find((item) => item && typeof item === "object") as
@@ -121,6 +160,98 @@ function readCoverImage(source: BackendListing) {
   }
 
   return null;
+}
+
+function readGalleryImages(source: BackendListing): GalleryImage[] {
+  const property = readNestedRecord(source, "property");
+  const images = source.images ?? property?.images;
+
+  if (!Array.isArray(images)) {
+    const coverImageUrl = readCoverImage(source);
+
+    return coverImageUrl
+      ? [{ id: "cover", url: coverImageUrl, alt: readString(source, ["title", "name"]) }]
+      : [];
+  }
+
+  return images
+    .map((item, index): GalleryImage | null => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const image = item as BackendListing;
+      const url = readString(image, ["url", "imageUrl", "fileUrl", "publicUrl"]);
+
+      if (!url) {
+        return null;
+      }
+
+      return {
+        alt: readString(image, ["alt", "altText", "description"], readString(source, ["title", "name"])),
+        id: readNumber(image, ["id", "imageId"]) ?? readString(image, ["id", "imageId"], String(index)),
+        url
+      };
+    })
+    .filter((image): image is GalleryImage => Boolean(image));
+}
+
+function readAmenities(source: BackendListing): ListingAmenity[] {
+  const property = readNestedRecord(source, "property");
+  const amenities = source.amenities ?? property?.amenities;
+
+  if (!Array.isArray(amenities)) {
+    return [];
+  }
+
+  return amenities
+    .map((item, index): ListingAmenity | null => {
+      if (typeof item === "string") {
+        return {
+          id: item,
+          name: item
+        };
+      }
+
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const amenity = item as BackendListing;
+      const nestedAmenity = readNestedRecord(amenity, "amenity");
+      const sourceAmenity = nestedAmenity ?? amenity;
+      const name = readString(sourceAmenity, ["name", "label", "code"]);
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        category: readString(sourceAmenity, ["category", "categoryName"]),
+        id: readNumber(sourceAmenity, ["id", "amenityId"]) ?? readString(sourceAmenity, ["code"], String(index)),
+        name
+      };
+    })
+    .filter((amenity): amenity is ListingAmenity => Boolean(amenity));
+}
+
+function readAgent(source: BackendListing): ListingAgent | null {
+  const agent =
+    readNestedRecord(source, "agent") ??
+    readNestedRecord(source, "assignedAgent") ??
+    readNestedRecord(readNestedRecord(source, "property") ?? {}, "assignedAgent");
+
+  if (!agent) {
+    return null;
+  }
+
+  const fullName = readString(agent, ["fullName", "name", "email"], "Assigned agent");
+
+  return {
+    email: readString(agent, ["email"]) || undefined,
+    fullName,
+    phone: readString(agent, ["phone", "phoneNumber"]) || undefined
+  };
 }
 
 function readPurpose(value: string): ListingPurpose | null {
@@ -146,6 +277,28 @@ function normalizePublicListing(listing: BackendListing): PublicListing {
     slug: readString(listing, ["slug"], String(id || title)),
     status: readString(listing, ["status", "listingStatus"], "PUBLISHED"),
     title
+  };
+}
+
+function normalizePublicListingDetail(listing: BackendListing): PublicListingDetail {
+  const normalizedListing = normalizePublicListing(listing);
+  const property = readNestedRecord(listing, "property") ?? {};
+  const images = readGalleryImages(listing);
+
+  return {
+    ...normalizedListing,
+    agent: readAgent(listing),
+    amenities: readAmenities(listing),
+    description:
+      readString(listing, ["description", "content"]) ||
+      readString(property, ["description"]) ||
+      "Listing description is being updated.",
+    images: images.length
+      ? images
+      : normalizedListing.coverImageUrl
+        ? [{ id: "cover", url: normalizedListing.coverImageUrl, alt: normalizedListing.title }]
+        : [],
+    isFavorite: readBoolean(listing, ["isFavorite", "favorite", "favorited"])
   };
 }
 
@@ -176,4 +329,51 @@ export function searchPublicListings(params: PublicListingSearchParams) {
       ...response,
       content: response.content.map(normalizePublicListing)
     }));
+}
+
+function getOrCreateSessionId() {
+  const storageKey = "rem.public.sessionId";
+  const existingSessionId = window.localStorage.getItem(storageKey);
+
+  if (existingSessionId) {
+    return existingSessionId;
+  }
+
+  const sessionId =
+    "randomUUID" in window.crypto
+      ? window.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  window.localStorage.setItem(storageKey, sessionId);
+  return sessionId;
+}
+
+export function getPublicListingDetail(slug: string) {
+  return apiClient
+    .get<BackendListing>(`/search/listings/${encodeURIComponent(slug)}`, {
+      headers: {
+        "X-Session-Id": getOrCreateSessionId()
+      },
+      skipAuth: true
+    })
+    .then(normalizePublicListingDetail);
+}
+
+export function getFavoriteListings(params: { page?: number; size?: number } = {}) {
+  return apiClient
+    .get<PaginatedResponse<BackendListing>>("/listings/favorites", {
+      query: params
+    })
+    .then((response) => ({
+      ...response,
+      content: response.content.map(normalizePublicListing)
+    }));
+}
+
+export function addListingFavorite(listingId: number | string) {
+  return apiClient.post<void>(`/listings/${listingId}/favorite`);
+}
+
+export function removeListingFavorite(listingId: number | string) {
+  return apiClient.delete<void>(`/listings/${listingId}/favorite`);
 }

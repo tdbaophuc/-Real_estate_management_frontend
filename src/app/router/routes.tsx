@@ -6,6 +6,7 @@ import { RoleGuard } from "../../shared/auth/RoleGuard";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { RegisterPage } from "../../features/auth/RegisterPage";
+import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
 import { PlaceholderPage } from "../../shared/components/PlaceholderPage";
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: "/dashboard", element: <DashboardPage /> },
+          { path: "/favorites", element: <FavoriteListingsPage /> },
           { path: "/properties", element: <PlaceholderPage title="Properties" /> },
           { path: "/listings", element: <PlaceholderPage title="Listings" /> },
           { path: "/customers", element: <PlaceholderPage title="Customers" /> },

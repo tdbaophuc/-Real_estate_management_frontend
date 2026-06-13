@@ -5,6 +5,7 @@ export type NavigationItem = {
   label: string;
   icon:
     | "dashboard"
+    | "favorites"
     | "properties"
     | "listings"
     | "customers"
@@ -25,6 +26,12 @@ export const navigationItems: NavigationItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: "dashboard",
+    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
+  },
+  {
+    href: "/favorites",
+    label: "Favorites",
+    icon: "favorites",
     roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
   },
   {
@@ -110,4 +117,3 @@ export const navigationItems: NavigationItem[] = [
 export function canAccessNavigationItem(item: NavigationItem, roles: RoleCode[]) {
   return item.roles.some((role) => roles.includes(role));
 }
-

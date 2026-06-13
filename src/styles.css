@@ -464,6 +464,13 @@ p {
   margin: 22px 0;
 }
 
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -471,8 +478,48 @@ p {
   margin-top: 18px;
 }
 
+.detail-main-section {
+  display: grid;
+  gap: 22px;
+}
+
 .content-section {
   padding: 22px;
+}
+
+.detail-description p:last-child,
+.detail-amenities p:last-child {
+  margin-bottom: 0;
+}
+
+.amenity-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.amenity-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-muted);
+  font-weight: 700;
+}
+
+.contact-card,
+.contact-actions {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.contact-actions {
+  grid-template-columns: 1fr;
 }
 
 .image-gallery {
@@ -494,6 +541,62 @@ p {
   height: min(48vw, 420px);
   object-fit: cover;
   display: block;
+}
+
+.detail-skeleton {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.detail-skeleton div {
+  min-height: 120px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.66), transparent),
+    #e8efec;
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.1s linear infinite;
+}
+
+.detail-skeleton div:first-child {
+  min-height: 88px;
+}
+
+.detail-skeleton div:nth-child(2) {
+  min-height: 420px;
+}
+
+.favorite-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.favorite-listing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.favorite-listing-row h3 {
+  margin: 10px 0 8px;
+}
+
+.favorite-listing-side {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
+.favorite-listing-side strong {
+  font-size: 1.08rem;
 }
 
 .auth-page {
@@ -819,6 +922,7 @@ p {
   }
 
   .listing-grid,
+  .favorite-listing-row,
   .detail-grid,
   .metric-grid {
     grid-template-columns: 1fr;
@@ -845,6 +949,10 @@ p {
   .filter-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .favorite-listing-side {
+    justify-items: start;
   }
 
   .topbar-actions,
