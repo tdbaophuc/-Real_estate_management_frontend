@@ -4,20 +4,20 @@ export type NavigationItem = {
   href: string;
   label: string;
   icon:
-    | "dashboard"
-    | "favorites"
-    | "properties"
-    | "listings"
-    | "customers"
-    | "leads"
-    | "appointments"
-    | "contracts"
-    | "transactions"
-    | "commissions"
-    | "notifications"
-    | "reports"
-    | "ai"
-    | "admin";
+  | "dashboard"
+  | "favorites"
+  | "properties"
+  | "listings"
+  | "customers"
+  | "leads"
+  | "appointments"
+  | "contracts"
+  | "transactions"
+  | "commissions"
+  | "notifications"
+  | "reports"
+  | "ai"
+  | "admin";
   roles: RoleCode[];
 };
 
