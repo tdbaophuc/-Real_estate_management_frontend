@@ -42,7 +42,8 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -273,6 +274,11 @@ p {
 .input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(15, 111, 92, 0.14);
+}
+
+.textarea {
+  min-height: 116px;
+  resize: vertical;
 }
 
 .input-error {
@@ -534,6 +540,11 @@ p {
   gap: 18px;
 }
 
+.field-button-align {
+  justify-content: end;
+  padding-top: 24px;
+}
+
 .form-section {
   display: grid;
   gap: 14px;
@@ -763,6 +774,53 @@ p {
 
 .favorite-listing-side strong {
   font-size: 1.08rem;
+}
+
+.listing-workflow-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.listing-workflow-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.listing-workflow-card h3 {
+  margin: 10px 0 8px;
+}
+
+.listing-workflow-card strong {
+  white-space: nowrap;
+}
+
+.listing-workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.listing-workflow-summary div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.listing-workflow-summary span {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .property-price-block,
@@ -1296,6 +1354,7 @@ p {
 
   .listing-grid,
   .favorite-listing-row,
+  .listing-workflow-card,
   .detail-grid,
   .dashboard-actions,
   .property-image-upload,
@@ -1338,7 +1397,8 @@ p {
   }
 
   .property-detail-grid,
-  .property-fact-grid {
+  .property-fact-grid,
+  .listing-workflow-summary {
     grid-template-columns: 1fr;
   }
 

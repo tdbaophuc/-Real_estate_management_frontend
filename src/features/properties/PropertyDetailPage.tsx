@@ -8,6 +8,7 @@ import {
   Building2,
   CheckCircle2,
   Edit,
+  FilePlus2,
   Home,
   ImagePlus,
   MapPin,
@@ -371,6 +372,12 @@ export function PropertyDetailPage() {
                 <Link to={`/properties/${property.id}/edit`}>
                   <Edit size={16} />
                   Edit
+                </Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to={`/listings/new?propertyId=${encodeURIComponent(String(property.id))}`}>
+                  <FilePlus2 size={16} />
+                  Create listing
                 </Link>
               </Button>
             </div>

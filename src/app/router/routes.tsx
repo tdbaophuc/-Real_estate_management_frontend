@@ -7,6 +7,8 @@ import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { RegisterPage } from "../../features/auth/RegisterPage";
 import { NotificationsPage } from "../../features/notifications/NotificationsPage";
+import { ListingFormPage } from "../../features/listings/ListingFormPage";
+import { ListingsPage } from "../../features/listings/ListingsPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
@@ -69,7 +71,30 @@ export const router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/listings", element: <PlaceholderPage title="Listings" /> },
+          {
+            path: "/listings",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ListingsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/listings/new",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ListingFormPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/listings/:id/edit",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ListingFormPage />
+              </RoleGuard>
+            )
+          },
           { path: "/customers", element: <PlaceholderPage title="Customers" /> },
           { path: "/leads", element: <PlaceholderPage title="Leads" /> },
           { path: "/appointments", element: <PlaceholderPage title="Appointments" /> },
