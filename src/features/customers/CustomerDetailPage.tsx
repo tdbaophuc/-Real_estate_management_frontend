@@ -1,0 +1,373 @@
+import { useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router-dom";
+import { ArrowLeft, Bot, FileText, Plus, Sparkles } from "lucide-react";
+import { normalizeUnknownError } from "../../shared/api/errors";
+import { Button } from "../../shared/ui/Button";
+import { EmptyState } from "../../shared/ui/EmptyState";
+import { Input } from "../../shared/ui/Input";
+import { Select } from "../../shared/ui/Select";
+import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { formatCurrency } from "../../shared/lib/format";
+import { CustomerForm, toCustomerRequest, type CustomerFormValues } from "./CustomerForm";
+import {
+  addCustomerNote,
+  addCustomerRequirement,
+  getCustomer,
+  getCustomerAiSummary,
+  getCustomerRecommendations,
+  getCustomerTimeline,
+  updateCustomer,
+  type CustomerPurpose,
+  type CustomerRecommendationRequest
+} from "./customerApi";
+
+const purposeOptions = [
+  { label: "Any purpose", value: "" },
+  { label: "Sale", value: "SALE" },
+  { label: "Rent", value: "RENT" }
+];
+
+function statusTone(status: string) {
+  if (status === "ACTIVE") {
+    return "success";
+  }
+
+  if (status === "ARCHIVED") {
+    return "danger";
+  }
+
+  return "neutral";
+}
+
+function priorityTone(priority: string) {
+  if (priority === "HIGH") {
+    return "danger";
+  }
+
+  if (priority === "MEDIUM") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function toNumber(value: string) {
+  return value.trim() ? Number(value) : undefined;
+}
+
+export function CustomerDetailPage() {
+  const { id } = useParams();
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState("");
+  const [requirementSummary, setRequirementSummary] = useState("");
+  const [requirementPurpose, setRequirementPurpose] = useState<CustomerPurpose | "">("");
+  const [requirementLocation, setRequirementLocation] = useState("");
+  const [requirementMaxPrice, setRequirementMaxPrice] = useState("");
+  const [recommendationLimit, setRecommendationLimit] = useState("5");
+  const [recommendationPurpose, setRecommendationPurpose] = useState<CustomerPurpose | "">("");
+  const [recommendationMaxPrice, setRecommendationMaxPrice] = useState("");
+
+  const customerQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => getCustomer(id ?? ""),
+    queryKey: ["customer", id],
+    retry: 1
+  });
+  const timelineQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => getCustomerTimeline(id ?? ""),
+    queryKey: ["customer", id, "timeline"],
+    retry: 1
+  });
+  const summaryQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => getCustomerAiSummary(id ?? ""),
+    queryKey: ["customer", id, "ai-summary"],
+    retry: 1
+  });
+  const updateMutation = useMutation({
+    mutationFn: (values: CustomerFormValues) => updateCustomer(id ?? "", toCustomerRequest(values)),
+    onSuccess: (customer) => {
+      queryClient.setQueryData(["customer", id], customer);
+      void queryClient.invalidateQueries({ queryKey: ["customers"] });
+    }
+  });
+  const noteMutation = useMutation({
+    mutationFn: () => addCustomerNote(id ?? "", note.trim()),
+    onSuccess: () => {
+      setNote("");
+      void queryClient.invalidateQueries({ queryKey: ["customer", id] });
+      void queryClient.invalidateQueries({ queryKey: ["customer", id, "timeline"] });
+    }
+  });
+  const requirementMutation = useMutation({
+    mutationFn: () =>
+      addCustomerRequirement(id ?? "", {
+        currency: "VND",
+        location: requirementLocation || undefined,
+        maxPrice: toNumber(requirementMaxPrice) ?? null,
+        purpose: requirementPurpose || null,
+        summary: requirementSummary || undefined
+      }),
+    onSuccess: () => {
+      setRequirementSummary("");
+      setRequirementPurpose("");
+      setRequirementLocation("");
+      setRequirementMaxPrice("");
+      void queryClient.invalidateQueries({ queryKey: ["customer", id] });
+      void queryClient.invalidateQueries({ queryKey: ["customer", id, "timeline"] });
+    }
+  });
+  const recommendationsMutation = useMutation({
+    mutationFn: () => {
+      const request: CustomerRecommendationRequest = {
+        currency: "VND",
+        limit: Number(recommendationLimit || 5),
+        maxPrice: toNumber(recommendationMaxPrice),
+        purpose: recommendationPurpose
+      };
+
+      return getCustomerRecommendations(id ?? "", request);
+    }
+  });
+  const customer = customerQuery.data;
+  const normalizedError = customerQuery.error ? normalizeUnknownError(customerQuery.error) : null;
+  const summaryError = summaryQuery.error ? normalizeUnknownError(summaryQuery.error) : null;
+  const recommendationError = recommendationsMutation.error
+    ? normalizeUnknownError(recommendationsMutation.error)
+    : null;
+
+  if (!id) {
+    return (
+      <section className="content-section">
+        <EmptyState title="Customer not found" description="The customer URL is missing an id." />
+      </section>
+    );
+  }
+
+  if (customerQuery.isLoading) {
+    return (
+      <section className="detail-skeleton">
+        <div />
+        <div />
+        <div />
+      </section>
+    );
+  }
+
+  if (normalizedError) {
+    return (
+      <section className="content-section">
+        <EmptyState
+          title="Customer could not be loaded"
+          description={normalizedError.message}
+          action={<Button onClick={() => customerQuery.refetch()}>Retry</Button>}
+        />
+      </section>
+    );
+  }
+
+  if (!customer) {
+    return null;
+  }
+
+  function submitNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (note.trim()) {
+      noteMutation.mutate();
+    }
+  }
+
+  function submitRequirement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (requirementSummary.trim() || requirementLocation.trim() || requirementPurpose || requirementMaxPrice.trim()) {
+      requirementMutation.mutate();
+    }
+  }
+
+  function submitRecommendations(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    recommendationsMutation.mutate();
+  }
+
+  return (
+    <section>
+      <Button asChild variant="ghost" size="sm">
+        <Link to="/customers">
+          <ArrowLeft size={16} />
+          Back to customers
+        </Link>
+      </Button>
+      <div className="detail-header">
+        <div>
+          <div className="detail-badges">
+            <StatusBadge tone={statusTone(customer.status)}>{customer.status}</StatusBadge>
+            <StatusBadge tone={priorityTone(customer.priority)}>{customer.priority}</StatusBadge>
+          </div>
+          <h1>{customer.fullName}</h1>
+          <p className="muted">{customer.code} / {customer.source} / {customer.preferredContactMethod}</p>
+        </div>
+      </div>
+      <div className="customer-crm-grid">
+        <section className="content-section customer-profile-card">
+          <p className="eyebrow">Profile</p>
+          <div><span>Email</span><strong>{customer.email || "Not provided"}</strong></div>
+          <div><span>Phone</span><strong>{customer.phone || "Not provided"}</strong></div>
+          <div><span>User id</span><strong>{customer.userId ?? "Not linked"}</strong></div>
+          <div><span>Assigned agent</span><strong>{customer.assignedAgentId ?? "Unassigned"}</strong></div>
+          {customer.notes ? <p className="muted">{customer.notes}</p> : null}
+        </section>
+        <section className="content-section ai-customer-card">
+          <div className="section-header">
+            <div>
+              <p className="eyebrow">AI summary</p>
+              <h2>Customer brief</h2>
+            </div>
+            <Bot size={20} />
+          </div>
+          {summaryQuery.isLoading ? <p className="muted">Generating customer summary.</p> : null}
+          {summaryError ? (
+            <EmptyState
+              title="AI summary unavailable"
+              description={summaryError.message || "AI provider returned no customer summary."}
+              action={<Button onClick={() => summaryQuery.refetch()}>Retry</Button>}
+            />
+          ) : null}
+          {summaryQuery.data ? (
+            <div className="ai-summary-block">
+              <p>{summaryQuery.data.summary}</p>
+              {summaryQuery.data.nextAction ? <strong>Next: {summaryQuery.data.nextAction}</strong> : null}
+              {summaryQuery.data.tags.length ? <small>{summaryQuery.data.tags.join(" / ")}</small> : null}
+              {summaryQuery.data.risks.length ? <small>Risks: {summaryQuery.data.risks.join(" / ")}</small> : null}
+            </div>
+          ) : null}
+        </section>
+      </div>
+      <section className="content-section">
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">Update</p>
+            <h2>Edit customer</h2>
+          </div>
+        </div>
+        <CustomerForm
+          customer={customer}
+          submitLabel="Save customer"
+          onSubmit={(values) => updateMutation.mutateAsync(values).then(() => undefined)}
+        />
+      </section>
+      <div className="customer-crm-grid">
+        <section className="content-section">
+          <div className="section-header">
+            <div>
+              <p className="eyebrow">Notes</p>
+              <h2>Customer notes</h2>
+            </div>
+          </div>
+          <form className="customer-inline-form" onSubmit={submitNote}>
+            <textarea className="input textarea" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Add note" />
+            <Button type="submit" disabled={!note.trim() || noteMutation.isPending}>
+              <Plus size={16} />
+              Add note
+            </Button>
+          </form>
+          <div className="customer-list-stack">
+            {customer.noteItems.length ? customer.noteItems.map((item) => (
+              <article key={item.id}>
+                <strong>{item.content}</strong>
+                {item.createdAt ? <small>{item.createdAt}</small> : null}
+              </article>
+            )) : <p className="muted">No notes recorded.</p>}
+          </div>
+        </section>
+        <section className="content-section">
+          <div className="section-header">
+            <div>
+              <p className="eyebrow">Requirements</p>
+              <h2>Buying or rental needs</h2>
+            </div>
+          </div>
+          <form className="customer-inline-form" onSubmit={submitRequirement}>
+            <Input label="Summary" value={requirementSummary} onChange={(event) => setRequirementSummary(event.target.value)} />
+            <Select label="Purpose" options={purposeOptions} value={requirementPurpose} onChange={(event) => setRequirementPurpose(event.target.value as CustomerPurpose | "")} />
+            <Input label="Location" value={requirementLocation} onChange={(event) => setRequirementLocation(event.target.value)} />
+            <Input label="Max price" value={requirementMaxPrice} onChange={(event) => setRequirementMaxPrice(event.target.value)} />
+            <Button type="submit" disabled={requirementMutation.isPending}>
+              <Plus size={16} />
+              Add requirement
+            </Button>
+          </form>
+          <div className="customer-list-stack">
+            {customer.requirements.length ? customer.requirements.map((requirement) => (
+              <article key={requirement.id}>
+                <strong>{requirement.summary}</strong>
+                <small>{requirement.purpose ?? "Any purpose"} / {requirement.location || "Any location"}</small>
+                <small>
+                  {requirement.maxPrice ? `Up to ${formatCurrency(requirement.maxPrice, requirement.currency)}` : "Budget updating"}
+                </small>
+              </article>
+            )) : <p className="muted">No requirements recorded.</p>}
+          </div>
+        </section>
+      </div>
+      <section className="content-section">
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">AI recommendations</p>
+            <h2>Suggested listings</h2>
+          </div>
+          <Sparkles size={20} />
+        </div>
+        <form className="customer-recommendation-form" onSubmit={submitRecommendations}>
+          <Input label="Limit" value={recommendationLimit} onChange={(event) => setRecommendationLimit(event.target.value)} />
+          <Select label="Purpose" options={purposeOptions} value={recommendationPurpose} onChange={(event) => setRecommendationPurpose(event.target.value as CustomerPurpose | "")} />
+          <Input label="Max price" value={recommendationMaxPrice} onChange={(event) => setRecommendationMaxPrice(event.target.value)} />
+          <Button type="submit" disabled={recommendationsMutation.isPending}>
+            Generate recommendations
+          </Button>
+        </form>
+        {recommendationError ? (
+          <EmptyState title="Recommendations unavailable" description={recommendationError.message || "AI provider returned no recommendations."} />
+        ) : null}
+        {recommendationsMutation.data ? (
+          <div className="customer-list-stack">
+            {recommendationsMutation.data.length ? recommendationsMutation.data.map((listing) => (
+              <article key={listing.id}>
+                <strong>{listing.title}</strong>
+                <small>{listing.score ? `Match ${listing.score}` : "Match score updating"}</small>
+                <small>{listing.price ? formatCurrency(listing.price, "VND") : "Price updating"}</small>
+                {listing.url ? <Link to={listing.url}>Open public listing</Link> : null}
+              </article>
+            )) : <EmptyState title="No recommendations" description="AI returned an empty recommendation set." />}
+          </div>
+        ) : null}
+      </section>
+      <section className="content-section">
+        <div className="section-header">
+          <div>
+            <p className="eyebrow">Timeline</p>
+            <h2>CRM activity</h2>
+          </div>
+          <FileText size={20} />
+        </div>
+        {timelineQuery.isLoading ? <p className="muted">Loading timeline.</p> : null}
+        {timelineQuery.error ? (
+          <EmptyState title="Timeline unavailable" description={normalizeUnknownError(timelineQuery.error).message} />
+        ) : null}
+        <div className="timeline-list">
+          {timelineQuery.data?.length ? timelineQuery.data.map((item) => (
+            <article key={item.id}>
+              <span>{item.type}</span>
+              <strong>{item.title}</strong>
+              <p>{item.description}</p>
+              {item.timestamp ? <small>{item.timestamp}</small> : null}
+            </article>
+          )) : <p className="muted">No timeline activity yet.</p>}
+        </div>
+      </section>
+    </section>
+  );
+}
