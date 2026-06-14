@@ -12,6 +12,8 @@ import { CustomersPage } from "../../features/customers/CustomersPage";
 import { NotificationsPage } from "../../features/notifications/NotificationsPage";
 import { ListingFormPage } from "../../features/listings/ListingFormPage";
 import { ListingsPage } from "../../features/listings/ListingsPage";
+import { LeadDetailPage } from "../../features/leads/LeadDetailPage";
+import { LeadsPage } from "../../features/leads/LeadsPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
@@ -122,7 +124,22 @@ export const router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/leads", element: <PlaceholderPage title="Leads" /> },
+          {
+            path: "/leads",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <LeadsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/leads/:id",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <LeadDetailPage />
+              </RoleGuard>
+            )
+          },
           { path: "/appointments", element: <PlaceholderPage title="Appointments" /> },
           { path: "/contracts", element: <PlaceholderPage title="Contracts" /> },
           { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
