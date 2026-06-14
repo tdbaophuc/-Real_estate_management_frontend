@@ -1,3 +1,4 @@
+import type { Router } from "@remix-run/router";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthenticatedLayout } from "../layouts/AuthenticatedLayout";
 import { PublicLayout } from "../layouts/PublicLayout";
@@ -21,12 +22,14 @@ import { LeadsPage } from "../../features/leads/LeadsPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
+import { TransactionDetailPage } from "../../features/transactions/TransactionDetailPage";
+import { TransactionsPage } from "../../features/transactions/TransactionsPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
 import { PlaceholderPage } from "../../shared/components/PlaceholderPage";
 
-export const router = createBrowserRouter([
+export const router: Router = createBrowserRouter([
   {
     element: <PublicLayout />,
     children: [
@@ -184,7 +187,22 @@ export const router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
+          {
+            path: "/transactions",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <TransactionsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/transactions/:id",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <TransactionDetailPage />
+              </RoleGuard>
+            )
+          },
           { path: "/commissions", element: <PlaceholderPage title="Commissions" /> },
           { path: "/notifications", element: <NotificationsPage /> },
           { path: "/reports", element: <PlaceholderPage title="Reports" /> },
