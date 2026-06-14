@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,18 +9,43 @@ import {
   CheckCircle2,
   Edit,
   Home,
+  ImagePlus,
   MapPin,
   Ruler,
+  Star,
+  Trash2,
   UserRound
 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
+import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
+import { FileUploader } from "../../shared/ui/FileUploader";
 import { ImageGallery } from "../../shared/ui/ImageGallery";
+import { Input } from "../../shared/ui/Input";
+import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
-import { getProperty, getPropertyImages, type PropertyRecord } from "./propertyApi";
+import {
+  deletePropertyImage,
+  getProperty,
+  getPropertyImages,
+  setPropertyCoverImage,
+  type PropertyImage,
+  type PropertyRecord,
+  updatePropertyStatus,
+  uploadPropertyImage
+} from "./propertyApi";
+
+const propertyStatusOptions = [
+  { label: "Draft", value: "DRAFT" },
+  { label: "Available", value: "AVAILABLE" },
+  { label: "Reserved", value: "RESERVED" },
+  { label: "Sold", value: "SOLD" },
+  { label: "Rented", value: "RENTED" },
+  { label: "Inactive", value: "INACTIVE" }
+];
 
 function statusTone(status: string) {
   if (status === "AVAILABLE" || status === "ACTIVE") {
@@ -119,8 +144,117 @@ function PersonBlock({
   );
 }
 
+function ImageManagementPanel({
+  images,
+  isBusy,
+  onDelete,
+  onSetCover,
+  onUpload
+}: {
+  images: PropertyImage[];
+  isBusy: boolean;
+  onDelete: (imageId: number | string) => void;
+  onSetCover: (imageId: number | string) => void;
+  onUpload: (request: { altText: string; displayOrder: number; file: File }) => void;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [altText, setAltText] = useState("");
+  const [displayOrder, setDisplayOrder] = useState("0");
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedFile) {
+      return;
+    }
+
+    onUpload({
+      altText,
+      displayOrder: Number(displayOrder || 0),
+      file: selectedFile
+    });
+    setSelectedFile(null);
+    setAltText("");
+    setDisplayOrder("0");
+  }
+
+  return (
+    <section className="content-section property-image-manager">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">Images</p>
+          <h2>Image management</h2>
+        </div>
+      </div>
+      <form className="property-image-upload" onSubmit={handleSubmit}>
+        <FileUploader
+          accept="image/*"
+          onFilesSelected={(files) => setSelectedFile(files[0] ?? null)}
+        />
+        <Input
+          label="Alt text"
+          value={altText}
+          onChange={(event) => setAltText(event.target.value)}
+          placeholder="Mat tien"
+        />
+        <Input
+          label="Display order"
+          type="number"
+          min={0}
+          value={displayOrder}
+          onChange={(event) => setDisplayOrder(event.target.value)}
+        />
+        <Button type="submit" disabled={!selectedFile || isBusy}>
+          <ImagePlus size={16} />
+          Upload image
+        </Button>
+      </form>
+      {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
+      <div className="property-image-list">
+        {images.length ? (
+          images.map((image) => (
+            <article className="property-image-row" key={image.id}>
+              <img src={image.url} alt={image.alt ?? "Property"} />
+              <div>
+                <strong>{image.alt || "No alt text"}</strong>
+                <span>Order {image.displayOrder}</span>
+                {image.isCover ? <StatusBadge tone="success">Cover</StatusBadge> : null}
+              </div>
+              <div className="property-image-actions">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onSetCover(image.id)}
+                  disabled={image.isCover || isBusy}
+                >
+                  <Star size={16} />
+                  Set cover
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(image.id)}
+                  disabled={isBusy}
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </Button>
+              </div>
+            </article>
+          ))
+        ) : (
+          <EmptyState title="No images" description="Upload property images before publishing workflows." />
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function PropertyDetailPage() {
   const { id } = useParams();
+  const queryClient = useQueryClient();
+  const [nextStatus, setNextStatus] = useState("");
+  const [pendingStatus, setPendingStatus] = useState("");
   const propertyQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getProperty(id ?? ""),
@@ -138,9 +272,45 @@ export function PropertyDetailPage() {
     : null;
   const property = propertyQuery.data;
   const images = useMemo(
-    () => (imagesQuery.data?.length ? imagesQuery.data : property?.images ?? []),
+    () => (imagesQuery.data ? imagesQuery.data : property?.images ?? []),
     [imagesQuery.data, property?.images]
   );
+  const invalidatePropertyData = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["property", id] }),
+      queryClient.invalidateQueries({ queryKey: ["property", id, "images"] }),
+      queryClient.invalidateQueries({ queryKey: ["properties"] })
+    ]);
+  const uploadMutation = useMutation({
+    mutationFn: (request: { altText: string; displayOrder: number; file: File }) =>
+      uploadPropertyImage(id ?? "", request),
+    onSuccess: invalidatePropertyData
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (imageId: number | string) => deletePropertyImage(id ?? "", imageId),
+    onSuccess: invalidatePropertyData
+  });
+  const coverMutation = useMutation({
+    mutationFn: (imageId: number | string) => setPropertyCoverImage(id ?? "", imageId),
+    onSuccess: invalidatePropertyData
+  });
+  const statusMutation = useMutation({
+    mutationFn: (status: string) => updatePropertyStatus(id ?? "", status),
+    onSuccess: () => {
+      setPendingStatus("");
+      setNextStatus("");
+      return invalidatePropertyData();
+    }
+  });
+  const actionError =
+    uploadMutation.error ??
+    deleteMutation.error ??
+    coverMutation.error ??
+    statusMutation.error;
+  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+  const imageActionBusy =
+    uploadMutation.isPending || deleteMutation.isPending || coverMutation.isPending;
+  const selectedStatus = nextStatus || property?.status || "";
 
   if (!id) {
     return (
@@ -206,6 +376,18 @@ export function PropertyDetailPage() {
             </div>
           </div>
           <ImageGallery images={images} />
+          <ImageManagementPanel
+            images={images}
+            isBusy={imageActionBusy}
+            onUpload={(request) => uploadMutation.mutate(request)}
+            onDelete={(imageId) => deleteMutation.mutate(imageId)}
+            onSetCover={(imageId) => coverMutation.mutate(imageId)}
+          />
+          {normalizedActionError ? (
+            <div className="form-error" role="alert">
+              {normalizedActionError.message}
+            </div>
+          ) : null}
           <div className="detail-grid">
             <section className="content-section detail-main-section">
               <div className="property-fact-grid">
@@ -263,6 +445,21 @@ export function PropertyDetailPage() {
               <PersonBlock icon="agent" label="Assigned agent" person={property.assignedAgent} />
               <div className="workflow-summary">
                 <p className="eyebrow">Status workflow</p>
+                <div className="status-action-form">
+                  <Select
+                    label="New status"
+                    options={propertyStatusOptions}
+                    value={selectedStatus}
+                    onChange={(event) => setNextStatus(event.target.value)}
+                  />
+                  <Button
+                    variant="secondary"
+                    disabled={!selectedStatus || selectedStatus === property.status || statusMutation.isPending}
+                    onClick={() => setPendingStatus(selectedStatus)}
+                  >
+                    Change status
+                  </Button>
+                </div>
                 {workflowSummary(property.status).map((step) => (
                   <div className={step.active ? "workflow-step active" : "workflow-step"} key={step.label}>
                     <CheckCircle2 size={16} />
@@ -274,6 +471,13 @@ export function PropertyDetailPage() {
           </div>
         </>
       ) : null}
+      <ConfirmDialog
+        open={Boolean(pendingStatus)}
+        title="Change property status"
+        description={`Change status from ${labelStatus(property?.status ?? "")} to ${labelStatus(pendingStatus)}?`}
+        onCancel={() => setPendingStatus("")}
+        onConfirm={() => statusMutation.mutate(pendingStatus)}
+      />
     </section>
   );
 }

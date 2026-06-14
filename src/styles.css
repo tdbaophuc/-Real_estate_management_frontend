@@ -642,6 +642,73 @@ p {
   display: block;
 }
 
+.property-image-manager {
+  margin-top: 18px;
+}
+
+.property-image-upload {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) 150px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.property-image-upload .file-uploader {
+  min-height: 46px;
+}
+
+.property-image-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.property-image-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.property-image-row img {
+  width: 96px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.property-image-row div {
+  display: grid;
+  gap: 5px;
+}
+
+.property-image-row span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.property-image-actions,
+.status-action-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.status-action-form {
+  align-items: flex-end;
+  margin-bottom: 4px;
+}
+
+.status-action-form .field {
+  min-width: 170px;
+}
+
 .detail-skeleton {
   display: grid;
   gap: 18px;
@@ -1231,6 +1298,7 @@ p {
   .favorite-listing-row,
   .detail-grid,
   .dashboard-actions,
+  .property-image-upload,
   .property-card-grid,
   .property-filter-bar,
   .form-grid,
@@ -1272,6 +1340,14 @@ p {
   .property-detail-grid,
   .property-fact-grid {
     grid-template-columns: 1fr;
+  }
+
+  .property-image-row {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .property-image-actions {
+    grid-column: 1 / -1;
   }
 
   .property-price-block {

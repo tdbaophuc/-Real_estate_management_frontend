@@ -15,7 +15,9 @@ export type PropertySearchParams = {
 
 export type PropertyImage = {
   alt?: string;
+  displayOrder: number;
   id: number | string;
+  isCover: boolean;
   url: string;
 };
 
@@ -92,6 +94,12 @@ export type PropertyUpsertRequest = {
   purpose: PropertyPurpose;
 };
 
+export type PropertyImageUploadRequest = {
+  altText?: string;
+  displayOrder?: number;
+  file: File;
+};
+
 type BackendRecord = Record<string, unknown>;
 
 function readString(source: BackendRecord, keys: string[], fallback = "") {
@@ -120,6 +128,22 @@ function readNumber(source: BackendRecord, keys: string[]) {
   }
 
   return null;
+}
+
+function readBoolean(source: BackendRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      return value.toLowerCase() === "true";
+    }
+  }
+
+  return false;
 }
 
 function readNestedRecord(source: BackendRecord, key: string) {
@@ -200,11 +224,14 @@ function readImages(source: BackendRecord): PropertyImage[] {
 
       return {
         alt: readString(image, ["altText", "alt", "description"], readString(source, ["name", "code"])),
+        displayOrder: readNumber(image, ["displayOrder", "order", "sortOrder"]) ?? index,
         id: readNumber(image, ["id", "imageId"]) ?? readString(image, ["id", "imageId"], String(index)),
+        isCover: readBoolean(image, ["cover", "isCover", "coverImage", "primary"]),
         url
       };
     })
-    .filter((image): image is PropertyImage => Boolean(image));
+    .filter((image): image is PropertyImage => Boolean(image))
+    .sort((first, second) => first.displayOrder - second.displayOrder);
 }
 
 function normalizeProperty(property: BackendRecord): PropertyRecord {
@@ -286,5 +313,36 @@ export function createProperty(request: PropertyUpsertRequest) {
 export function updateProperty(propertyId: number | string, request: PropertyUpsertRequest) {
   return apiClient
     .put<BackendRecord>(`/properties/${encodeURIComponent(String(propertyId))}`, request)
+    .then(normalizeProperty);
+}
+
+export function uploadPropertyImage(
+  propertyId: number | string,
+  request: PropertyImageUploadRequest
+) {
+  return apiClient
+    .upload<BackendRecord>(`/properties/${encodeURIComponent(String(propertyId))}/images`, {
+      altText: request.altText,
+      displayOrder: request.displayOrder,
+      file: request.file
+    })
+    .then((image) => readImages({ images: [image] })[0] ?? image);
+}
+
+export function deletePropertyImage(propertyId: number | string, imageId: number | string) {
+  return apiClient.delete<void>(
+    `/properties/${encodeURIComponent(String(propertyId))}/images/${encodeURIComponent(String(imageId))}`
+  );
+}
+
+export function setPropertyCoverImage(propertyId: number | string, imageId: number | string) {
+  return apiClient.patch<void>(
+    `/properties/${encodeURIComponent(String(propertyId))}/cover-image/${encodeURIComponent(String(imageId))}`
+  );
+}
+
+export function updatePropertyStatus(propertyId: number | string, status: string) {
+  return apiClient
+    .patch<BackendRecord>(`/properties/${encodeURIComponent(String(propertyId))}/status`, { status })
     .then(normalizeProperty);
 }
