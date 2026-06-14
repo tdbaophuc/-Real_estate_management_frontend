@@ -3,6 +3,8 @@ import { AuthenticatedLayout } from "../layouts/AuthenticatedLayout";
 import { PublicLayout } from "../layouts/PublicLayout";
 import { AppointmentDetailPage } from "../../features/appointments/AppointmentDetailPage";
 import { AppointmentsPage } from "../../features/appointments/AppointmentsPage";
+import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
+import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
 import { RoleGuard } from "../../shared/auth/RoleGuard";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
@@ -166,7 +168,22 @@ export const router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/contracts", element: <PlaceholderPage title="Contracts" /> },
+          {
+            path: "/contracts",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ContractsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/contracts/:id",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ContractDetailPage />
+              </RoleGuard>
+            )
+          },
           { path: "/transactions", element: <PlaceholderPage title="Transactions" /> },
           { path: "/commissions", element: <PlaceholderPage title="Commissions" /> },
           { path: "/notifications", element: <NotificationsPage /> },
