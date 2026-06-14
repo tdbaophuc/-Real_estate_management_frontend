@@ -3,19 +3,26 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Rocket, Save, Send, Sparkles, XCircle } from "lucide-react";
 import { z } from "zod";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
+import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import type { RoleCode } from "../../shared/types/auth";
 import {
   createListing,
+  generateListingDescription,
+  runListingWorkflowAction,
   updateListing,
+  type ListingDescriptionSuggestion,
   type ListingCreateRequest,
   type ListingRecord,
-  type ListingUpdateRequest
+  type ListingUpdateRequest,
+  type ListingWorkflowAction
 } from "./listingApi";
 import { getStoredListing, saveListingWorkflowState } from "./listingWorkflowState";
 
@@ -50,6 +57,26 @@ const visibilityOptions = [
   { label: "Private", value: "PRIVATE" },
   { label: "Unlisted", value: "UNLISTED" }
 ];
+
+const aiToneOptions = [
+  { label: "Professional", value: "PROFESSIONAL" },
+  { label: "Friendly", value: "FRIENDLY" },
+  { label: "Luxury", value: "LUXURY" },
+  { label: "Concise", value: "CONCISE" }
+];
+
+const aiLanguageOptions = [
+  { label: "Vietnamese", value: "vi" },
+  { label: "English", value: "en" }
+];
+
+const workflowActionLabels: Record<ListingWorkflowAction, string> = {
+  approve: "Approve",
+  publish: "Publish",
+  reject: "Reject",
+  submit: "Submit review",
+  unpublish: "Unpublish"
+};
 
 function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
@@ -107,6 +134,51 @@ function toUpdateRequest(values: ListingFormValues): ListingUpdateRequest {
   return toCreateRequest(values);
 }
 
+function hasAnyRole(roles: RoleCode[], allowedRoles: RoleCode[]) {
+  return roles.some((role) => allowedRoles.includes(role));
+}
+
+function getAvailableWorkflowActions(status: string, roles: RoleCode[]) {
+  const normalizedStatus = status || "DRAFT";
+  const canAgentAct = hasAnyRole(roles, ["ADMIN", "MANAGER", "AGENT"]);
+  const canReview = hasAnyRole(roles, ["ADMIN", "MANAGER"]);
+  const actions: ListingWorkflowAction[] = [];
+
+  if (canAgentAct && ["DRAFT", "REJECTED", "UNPUBLISHED"].includes(normalizedStatus)) {
+    actions.push("submit");
+  }
+
+  if (canReview && normalizedStatus === "PENDING_REVIEW") {
+    actions.push("approve", "reject");
+  }
+
+  if (canAgentAct && ["APPROVED", "UNPUBLISHED"].includes(normalizedStatus)) {
+    actions.push("publish");
+  }
+
+  if (canAgentAct && normalizedStatus === "PUBLISHED") {
+    actions.push("unpublish");
+  }
+
+  return actions;
+}
+
+function getWorkflowIcon(action: ListingWorkflowAction) {
+  if (action === "submit") {
+    return <Send size={16} />;
+  }
+
+  if (action === "approve") {
+    return <CheckCircle2 size={16} />;
+  }
+
+  if (action === "reject") {
+    return <XCircle size={16} />;
+  }
+
+  return <Rocket size={16} />;
+}
+
 function FormSection({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="form-section">
@@ -137,17 +209,27 @@ export function ListingFormPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isEditMode = Boolean(id);
-  const cachedListing = id
-    ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id])
-    : null;
-  const storedListing = id ? getStoredListing(id) : null;
-  const workflowListing = cachedListing ?? storedListing;
+  const [workflowListing, setWorkflowListing] = useState<ListingRecord | null>(
+    () =>
+      id
+        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
+        : null
+  );
   const defaultValues = useMemo(
     () => toDefaultValues(workflowListing, searchParams.get("propertyId") ?? ""),
     [searchParams, workflowListing]
   );
   const [formError, setFormError] = useState<string | null>(null);
+  const [pendingWorkflowAction, setPendingWorkflowAction] =
+    useState<ListingWorkflowAction | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [aiTone, setAiTone] = useState("PROFESSIONAL");
+  const [aiLanguage, setAiLanguage] = useState("vi");
+  const [aiIncludeSeo, setAiIncludeSeo] = useState(true);
+  const [aiExtraInstructions, setAiExtraInstructions] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState<ListingDescriptionSuggestion | null>(null);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -164,11 +246,60 @@ export function ListingFormPage() {
     mutationFn: (values: ListingFormValues) =>
       isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values))
   });
+  const workflowMutation = useMutation({
+    mutationFn: ({ action, reason }: { action: ListingWorkflowAction; reason?: string }) => {
+      if (!workflowListing) {
+        throw new Error("Listing workflow state is not available.");
+      }
+
+      return runListingWorkflowAction({ action, current: workflowListing, reason });
+    },
+    onSuccess: (saved) => {
+      persistWorkflowListing(saved);
+      setPendingWorkflowAction(null);
+      setRejectReason("");
+    }
+  });
+  const aiMutation = useMutation({
+    mutationFn: () => {
+      if (!workflowListing) {
+        throw new Error("Create or save the listing before requesting AI suggestions.");
+      }
+
+      return generateListingDescription({
+        extraInstructions: aiExtraInstructions || undefined,
+        includeSeo: aiIncludeSeo,
+        language: aiLanguage,
+        listingId: workflowListing.id,
+        tone: aiTone
+      });
+    },
+    onSuccess: setAiSuggestion
+  });
   const title = watch("title");
+  const availableWorkflowActions = workflowListing
+    ? getAvailableWorkflowActions(workflowListing.status, user?.roles ?? [])
+    : [];
+  const actionError = workflowMutation.error ?? aiMutation.error;
+  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
 
   useEffect(() => {
     reset(defaultValues);
   }, [defaultValues, reset]);
+
+  useEffect(() => {
+    setWorkflowListing(
+      id
+        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
+        : null
+    );
+  }, [id, queryClient]);
+
+  function persistWorkflowListing(saved: ListingRecord) {
+    setWorkflowListing(saved);
+    queryClient.setQueryData(["listing-workflow", saved.id], saved);
+    saveListingWorkflowState(saved);
+  }
 
   function applyGeneratedSlug() {
     setValue("slug", slugify(title), { shouldDirty: true, shouldValidate: true });
@@ -179,8 +310,7 @@ export function ListingFormPage() {
 
     try {
       const saved = await saveMutation.mutateAsync(values);
-      queryClient.setQueryData(["listing-workflow", saved.id], saved);
-      saveListingWorkflowState(saved);
+      persistWorkflowListing(saved);
       navigate(`/listings/${saved.id}/edit`, { replace: true });
     } catch (error) {
       const normalizedError = normalizeUnknownError(error);
@@ -196,6 +326,51 @@ export function ListingFormPage() {
       setFormError(normalizedError.message);
     }
   });
+
+  function confirmWorkflowAction() {
+    if (!pendingWorkflowAction) {
+      return;
+    }
+
+    workflowMutation.mutate({
+      action: pendingWorkflowAction,
+      reason: pendingWorkflowAction === "reject" ? rejectReason.trim() : undefined
+    });
+  }
+
+  function applyAiSuggestion(fields: Array<keyof ListingDescriptionSuggestion>) {
+    if (!aiSuggestion) {
+      return;
+    }
+
+    fields.forEach((field) => {
+      const value = aiSuggestion[field];
+
+      if (!value) {
+        return;
+      }
+
+      if (field === "title") {
+        setValue("title", value, { shouldDirty: true, shouldValidate: true });
+      }
+
+      if (field === "description" || field === "shortDescription") {
+        setValue("description", value, { shouldDirty: true, shouldValidate: true });
+      }
+
+      if (field === "seoTitle") {
+        setValue("seoTitle", value, { shouldDirty: true, shouldValidate: true });
+      }
+
+      if (field === "seoDescription") {
+        setValue("seoDescription", value, { shouldDirty: true, shouldValidate: true });
+      }
+
+      if (field === "seoKeywords") {
+        setValue("seoKeywords", value, { shouldDirty: true, shouldValidate: true });
+      }
+    });
+  }
 
   if (isEditMode && !workflowListing) {
     return (
@@ -243,6 +418,33 @@ export function ListingFormPage() {
           </div>
         </section>
       ) : null}
+      {workflowListing ? (
+        <section className="content-section listing-action-panel">
+          <div>
+            <p className="eyebrow">Workflow</p>
+            <h3>Listing actions</h3>
+          </div>
+          <div className="listing-action-buttons">
+            {availableWorkflowActions.length ? (
+              availableWorkflowActions.map((action) => (
+                <Button
+                  key={action}
+                  type="button"
+                  variant={action === "reject" ? "danger" : "secondary"}
+                  disabled={workflowMutation.isPending}
+                  onClick={() => setPendingWorkflowAction(action)}
+                >
+                  {getWorkflowIcon(action)}
+                  {workflowActionLabels[action]}
+                </Button>
+              ))
+            ) : (
+              <p className="muted">No workflow action is available for your role and this status.</p>
+            )}
+          </div>
+        </section>
+      ) : null}
+      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
       <form className="property-form" onSubmit={onSubmit}>
         <FormSection title="Listing source">
           <Input label="Property id" error={errors.propertyId?.message} {...register("propertyId")} />
@@ -277,6 +479,102 @@ export function ListingFormPage() {
           <Input label="SEO keywords" error={errors.seoKeywords?.message} {...register("seoKeywords")} />
           <TextareaField label="SEO description" rows={3} error={errors.seoDescription?.message} {...register("seoDescription")} />
         </FormSection>
+        <section className="form-section ai-suggestion-panel">
+          <div className="section-header">
+            <div>
+              <p className="eyebrow">AI assist</p>
+              <h3>Description and SEO suggestions</h3>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!workflowListing || aiMutation.isPending}
+              onClick={() => aiMutation.mutate()}
+            >
+              <Sparkles size={16} />
+              Generate suggestions
+            </Button>
+          </div>
+          <div className="form-grid">
+            <Select
+              label="Tone"
+              options={aiToneOptions}
+              value={aiTone}
+              onChange={(event) => setAiTone(event.target.value)}
+            />
+            <Select
+              label="Language"
+              options={aiLanguageOptions}
+              value={aiLanguage}
+              onChange={(event) => setAiLanguage(event.target.value)}
+            />
+            <label className="toggle-field">
+              <input
+                type="checkbox"
+                checked={aiIncludeSeo}
+                onChange={(event) => setAiIncludeSeo(event.target.checked)}
+              />
+              <span>Include SEO</span>
+            </label>
+            <TextareaField
+              label="Extra instructions"
+              rows={3}
+              value={aiExtraInstructions}
+              onChange={(event) => setAiExtraInstructions(event.target.value)}
+              placeholder="Emphasize location, amenities, or buyer profile"
+            />
+          </div>
+          {!workflowListing ? (
+            <p className="muted">Create or save the listing before requesting AI suggestions.</p>
+          ) : null}
+          {aiSuggestion ? (
+            <div className="ai-suggestion-results">
+              {aiSuggestion.title ? (
+                <article>
+                  <span>Title</span>
+                  <p>{aiSuggestion.title}</p>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => applyAiSuggestion(["title"])}>
+                    Apply title
+                  </Button>
+                </article>
+              ) : null}
+              {aiSuggestion.description || aiSuggestion.shortDescription ? (
+                <article>
+                  <span>Description</span>
+                  <p>{aiSuggestion.description || aiSuggestion.shortDescription}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => applyAiSuggestion([aiSuggestion.description ? "description" : "shortDescription"])}
+                  >
+                    Apply description
+                  </Button>
+                </article>
+              ) : null}
+              {aiSuggestion.seoTitle || aiSuggestion.seoDescription || aiSuggestion.seoKeywords ? (
+                <article>
+                  <span>SEO</span>
+                  <p>{[aiSuggestion.seoTitle, aiSuggestion.seoDescription, aiSuggestion.seoKeywords].filter(Boolean).join(" / ")}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => applyAiSuggestion(["seoTitle", "seoDescription", "seoKeywords"])}
+                  >
+                    Apply SEO
+                  </Button>
+                </article>
+              ) : null}
+              {aiSuggestion.socialCaption ? (
+                <article>
+                  <span>Social caption</span>
+                  <p>{aiSuggestion.socialCaption}</p>
+                </article>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
         {formError ? <p className="form-alert">{formError}</p> : null}
         <div className="form-actions">
           <Button type="submit" disabled={isSubmitting || saveMutation.isPending}>
@@ -285,6 +583,42 @@ export function ListingFormPage() {
           </Button>
         </div>
       </form>
+      <Dialog
+        open={Boolean(pendingWorkflowAction)}
+        onClose={() => setPendingWorkflowAction(null)}
+        title={`${pendingWorkflowAction ? workflowActionLabels[pendingWorkflowAction] : "Run"} listing`}
+      >
+        <div className="dialog-body">
+          <p>
+            Confirm {pendingWorkflowAction ? workflowActionLabels[pendingWorkflowAction].toLowerCase() : "this action"} for
+            listing {workflowListing?.code ?? workflowListing?.id}?
+          </p>
+          {pendingWorkflowAction === "reject" ? (
+            <TextareaField
+              label="Reject reason"
+              rows={4}
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="Explain what needs to be changed"
+            />
+          ) : null}
+        </div>
+        <footer className="dialog-actions">
+          <Button variant="secondary" onClick={() => setPendingWorkflowAction(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant={pendingWorkflowAction === "reject" ? "danger" : "primary"}
+            onClick={confirmWorkflowAction}
+            disabled={
+              workflowMutation.isPending ||
+              (pendingWorkflowAction === "reject" && !rejectReason.trim())
+            }
+          >
+            Confirm
+          </Button>
+        </footer>
+      </Dialog>
     </section>
   );
 }

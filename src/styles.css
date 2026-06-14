@@ -823,6 +823,58 @@ p {
   font-weight: 700;
 }
 
+.listing-action-panel,
+.ai-suggestion-panel,
+.ai-suggestion-results {
+  display: grid;
+  gap: 14px;
+}
+
+.listing-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding-top: 24px;
+  font-weight: 700;
+}
+
+.toggle-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.ai-suggestion-results {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ai-suggestion-results article {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ai-suggestion-results span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.ai-suggestion-results p {
+  margin-bottom: 0;
+  color: var(--text);
+}
+
 .property-price-block,
 .property-person,
 .property-detail-grid div,
@@ -1355,6 +1407,7 @@ p {
   .listing-grid,
   .favorite-listing-row,
   .listing-workflow-card,
+  .ai-suggestion-results,
   .detail-grid,
   .dashboard-actions,
   .property-image-upload,
