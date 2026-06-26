@@ -4,6 +4,8 @@ import { AuthenticatedLayout } from "../layouts/AuthenticatedLayout";
 import { PublicLayout } from "../layouts/PublicLayout";
 import { AppointmentDetailPage } from "../../features/appointments/AppointmentDetailPage";
 import { AppointmentsPage } from "../../features/appointments/AppointmentsPage";
+import { AdminUsersPage } from "../../features/admin/AdminUsersPage";
+import { AuditLogsPage } from "../../features/admin/AuditLogsPage";
 import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
 import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
@@ -219,7 +221,7 @@ export const router: Router = createBrowserRouter([
             path: "/admin/users",
             element: (
               <RoleGuard allowedRoles={["ADMIN"]}>
-                <PlaceholderPage title="Admin Users" />
+                <AdminUsersPage />
               </RoleGuard>
             )
           },
@@ -227,7 +229,7 @@ export const router: Router = createBrowserRouter([
             path: "/admin/audit-logs",
             element: (
               <RoleGuard allowedRoles={["ADMIN"]}>
-                <PlaceholderPage title="Audit Logs" />
+                <AuditLogsPage />
               </RoleGuard>
             )
           }

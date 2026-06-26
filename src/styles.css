@@ -1275,6 +1275,100 @@ p {
   font-weight: 700;
 }
 
+.admin-user-filter-bar {
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px) minmax(150px, 190px) auto;
+}
+
+.audit-filter-bar {
+  grid-template-columns: repeat(5, minmax(140px, 1fr)) auto;
+}
+
+.admin-role-list,
+.admin-role-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-role-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-weight: 750;
+}
+
+.admin-detail-drawer,
+.admin-profile-card,
+.admin-action-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-profile-card div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.admin-profile-card span {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.admin-profile-card small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.admin-action-panel {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.admin-action-panel h3 {
+  margin-bottom: 0;
+}
+
+.admin-role-editor label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-weight: 750;
+}
+
+.admin-role-editor input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+
+.audit-detail-pre {
+  overflow-x: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .property-price-block,
 .property-person,
 .property-detail-grid div,
@@ -1825,6 +1919,8 @@ p {
   .contract-upload-form,
   .transaction-filter-bar,
   .report-filter-bar,
+  .admin-user-filter-bar,
+  .audit-filter-bar,
   .transaction-create-form,
   .transaction-detail-grid,
   .transaction-inline-form,
