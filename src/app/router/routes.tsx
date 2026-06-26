@@ -15,6 +15,7 @@ import { CustomerCreatePage } from "../../features/customers/CustomerCreatePage"
 import { CustomerDetailPage } from "../../features/customers/CustomerDetailPage";
 import { CustomersPage } from "../../features/customers/CustomersPage";
 import { NotificationsPage } from "../../features/notifications/NotificationsPage";
+import { ReportsPage } from "../../features/reports/ReportsPage";
 import { ListingFormPage } from "../../features/listings/ListingFormPage";
 import { ListingsPage } from "../../features/listings/ListingsPage";
 import { LeadDetailPage } from "../../features/leads/LeadDetailPage";
@@ -205,7 +206,14 @@ export const router: Router = createBrowserRouter([
           },
           { path: "/commissions", element: <PlaceholderPage title="Commissions" /> },
           { path: "/notifications", element: <NotificationsPage /> },
-          { path: "/reports", element: <PlaceholderPage title="Reports" /> },
+          {
+            path: "/reports",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
+                <ReportsPage />
+              </RoleGuard>
+            )
+          },
           { path: "/ai", element: <PlaceholderPage title="AI Assistant" /> },
           {
             path: "/admin/users",
