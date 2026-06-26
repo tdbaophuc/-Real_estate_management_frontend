@@ -6,6 +6,7 @@ import { AppointmentDetailPage } from "../../features/appointments/AppointmentDe
 import { AppointmentsPage } from "../../features/appointments/AppointmentsPage";
 import { AdminUsersPage } from "../../features/admin/AdminUsersPage";
 import { AuditLogsPage } from "../../features/admin/AuditLogsPage";
+import { AiPage } from "../../features/ai/AiPage";
 import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
 import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
@@ -216,7 +217,7 @@ export const router: Router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/ai", element: <PlaceholderPage title="AI Assistant" /> },
+          { path: "/ai", element: <AiPage /> },
           {
             path: "/admin/users",
             element: (

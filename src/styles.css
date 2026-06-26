@@ -716,6 +716,32 @@ p {
   margin-bottom: 4px;
 }
 
+.property-image-ai-suggestion {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.property-image-ai-suggestion div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.property-image-ai-suggestion span,
+.property-image-ai-suggestion li {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.property-image-ai-suggestion p,
+.property-image-ai-suggestion ul {
+  margin: 0;
+}
+
 .status-action-form .field {
   min-width: 170px;
 }
@@ -1369,6 +1395,84 @@ p {
   word-break: break-word;
 }
 
+.ai-chat-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.ai-session-panel,
+.ai-chat-panel,
+.ai-message-list,
+.ai-session-meta {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.ai-session-meta {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ai-session-meta span,
+.ai-session-meta small {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.ai-message-list {
+  max-height: min(62vh, 680px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ai-message {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ai-message header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-message p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-message-assistant {
+  border-color: #b9d8ce;
+  background: #f4fbf8;
+}
+
+.ai-message-user {
+  background: var(--surface-muted);
+}
+
+.ai-message-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
 .property-price-block,
 .property-person,
 .property-detail-grid div,
@@ -1921,6 +2025,8 @@ p {
   .report-filter-bar,
   .admin-user-filter-bar,
   .audit-filter-bar,
+  .ai-chat-layout,
+  .ai-message-form,
   .transaction-create-form,
   .transaction-detail-grid,
   .transaction-inline-form,

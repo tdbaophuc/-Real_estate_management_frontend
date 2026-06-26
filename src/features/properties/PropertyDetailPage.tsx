@@ -7,12 +7,14 @@ import {
   BedDouble,
   Building2,
   CheckCircle2,
+  Copy,
   Edit,
   FilePlus2,
   Home,
   ImagePlus,
   MapPin,
   Ruler,
+  Sparkles,
   Star,
   Trash2,
   UserRound
@@ -28,6 +30,7 @@ import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
+import { analyzePropertyImage, type ImageAnalysisSuggestion } from "../ai/aiApi";
 import {
   deletePropertyImage,
   getProperty,
@@ -150,17 +153,31 @@ function ImageManagementPanel({
   isBusy,
   onDelete,
   onSetCover,
-  onUpload
+  onUpload,
+  propertyId
 }: {
   images: PropertyImage[];
   isBusy: boolean;
   onDelete: (imageId: number | string) => void;
   onSetCover: (imageId: number | string) => void;
   onUpload: (request: { altText: string; displayOrder: number; file: File }) => void;
+  propertyId: number | string;
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [altText, setAltText] = useState("");
   const [displayOrder, setDisplayOrder] = useState("0");
+  const [analysisByImage, setAnalysisByImage] = useState<Record<string, ImageAnalysisSuggestion>>({});
+  const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({});
+  const analysisMutation = useMutation({
+    mutationFn: (image: PropertyImage) =>
+      analyzePropertyImage({ imageId: image.id, imageUrl: image.url, propertyId }),
+    onSuccess: (analysis, image) => {
+      const key = String(image.id);
+      setAnalysisByImage((current) => ({ ...current, [key]: analysis }));
+      setCaptionDrafts((current) => ({ ...current, [key]: analysis.caption || analysis.summary }));
+    }
+  });
+  const analysisError = analysisMutation.error ? normalizeUnknownError(analysisMutation.error) : null;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -177,6 +194,12 @@ function ImageManagementPanel({
     setSelectedFile(null);
     setAltText("");
     setDisplayOrder("0");
+  }
+
+  function copyText(value: string) {
+    if (navigator.clipboard) {
+      void navigator.clipboard.writeText(value);
+    }
   }
 
   return (
@@ -240,13 +263,75 @@ function ImageManagementPanel({
                   <Trash2 size={16} />
                   Delete
                 </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => analysisMutation.mutate(image)}
+                  disabled={analysisMutation.isPending}
+                >
+                  <Sparkles size={16} />
+                  Analyze
+                </Button>
               </div>
+              {analysisByImage[String(image.id)] ? (
+                <div className="property-image-ai-suggestion">
+                  <div>
+                    <span>AI suggestion</span>
+                    <strong>{analysisByImage[String(image.id)].quality}</strong>
+                  </div>
+                  <p>{analysisByImage[String(image.id)].summary}</p>
+                  {analysisByImage[String(image.id)].coverRecommendation ? (
+                    <p>{analysisByImage[String(image.id)].coverRecommendation}</p>
+                  ) : null}
+                  {analysisByImage[String(image.id)].warnings.length ? (
+                    <ul>
+                      {analysisByImage[String(image.id)].warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <label className="field">
+                    <span>Editable caption draft</span>
+                    <textarea
+                      className="input textarea"
+                      value={captionDrafts[String(image.id)] ?? ""}
+                      onChange={(event) =>
+                        setCaptionDrafts((current) => ({
+                          ...current,
+                          [String(image.id)]: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="property-image-actions">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => copyText(captionDrafts[String(image.id)] ?? "")}
+                    >
+                      <Copy size={16} />
+                      Copy caption
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setAltText(captionDrafts[String(image.id)] ?? "")}
+                    >
+                      Use as upload alt text
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </article>
           ))
         ) : (
           <EmptyState title="No images" description="Upload property images before publishing workflows." />
         )}
       </div>
+      {analysisError ? <p className="form-alert">{analysisError.message}</p> : null}
+      <p className="muted">
+        AI image analysis is a draft suggestion for copy/edit review only. It does not publish, change legal status, or make financial conclusions.
+      </p>
     </section>
   );
 }
@@ -389,6 +474,7 @@ export function PropertyDetailPage() {
             onUpload={(request) => uploadMutation.mutate(request)}
             onDelete={(imageId) => deleteMutation.mutate(imageId)}
             onSetCover={(imageId) => coverMutation.mutate(imageId)}
+            propertyId={property.id}
           />
           {normalizedActionError ? (
             <div className="form-error" role="alert">
