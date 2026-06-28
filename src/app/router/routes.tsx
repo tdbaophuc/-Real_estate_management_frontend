@@ -7,6 +7,7 @@ import { AppointmentsPage } from "../../features/appointments/AppointmentsPage";
 import { AdminUsersPage } from "../../features/admin/AdminUsersPage";
 import { AuditLogsPage } from "../../features/admin/AuditLogsPage";
 import { AiPage } from "../../features/ai/AiPage";
+import { AccountPage } from "../../features/account/AccountPage";
 import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
 import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
@@ -48,13 +49,28 @@ export const router: Router = createBrowserRouter([
     children: [
       {
         element: (
-          <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+          <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER", "OWNER"]}>
             <AuthenticatedLayout />
           </RoleGuard>
         ),
         children: [
-          { path: "/dashboard", element: <DashboardPage /> },
-          { path: "/favorites", element: <FavoriteListingsPage /> },
+          {
+            path: "/dashboard",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+                <DashboardPage />
+              </RoleGuard>
+            )
+          },
+          { path: "/account", element: <AccountPage /> },
+          {
+            path: "/favorites",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+                <FavoriteListingsPage />
+              </RoleGuard>
+            )
+          },
           {
             path: "/properties",
             element: (
@@ -207,8 +223,22 @@ export const router: Router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/commissions", element: <PlaceholderPage title="Commissions" /> },
-          { path: "/notifications", element: <NotificationsPage /> },
+          {
+            path: "/commissions",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <PlaceholderPage title="Commissions" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/notifications",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+                <NotificationsPage />
+              </RoleGuard>
+            )
+          },
           {
             path: "/reports",
             element: (
@@ -217,7 +247,14 @@ export const router: Router = createBrowserRouter([
               </RoleGuard>
             )
           },
-          { path: "/ai", element: <AiPage /> },
+          {
+            path: "/ai",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+                <AiPage />
+              </RoleGuard>
+            )
+          },
           {
             path: "/admin/users",
             element: (

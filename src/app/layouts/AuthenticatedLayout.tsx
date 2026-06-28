@@ -15,6 +15,7 @@ import {
   Menu,
   ReceiptText,
   ShieldCheck,
+  UserRound,
   Users
 } from "lucide-react";
 import { Link, NavLink, Outlet } from "react-router-dom";
@@ -105,6 +106,12 @@ export function AuthenticatedLayout() {
                   <strong>{user?.fullName ?? "Demo User"}</strong>
                   <small>{user?.email ?? "No email"}</small>
                 </div>
+                <Button asChild variant="secondary" size="sm">
+                  <Link to="/account">
+                    <UserRound size={16} />
+                    Account
+                  </Link>
+                </Button>
                 <Button variant="secondary" size="sm" onClick={logout}>
                   <LogOut size={16} />
                   Logout
