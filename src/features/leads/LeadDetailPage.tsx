@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Bot, CalendarClock, MessageSquare, Plus, UserPlus } from "lucide-react";
+import { ArrowLeft, Bot, CalendarClock, CheckCircle2, MessageSquare, Plus, Trash2, UserPlus } from "lucide-react";
+import { toIsoDateTime, formatAppointmentDateTime } from "../appointments/appointmentTime";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -19,6 +20,10 @@ import {
   type LeadActivityType,
   type LeadPipelineStatus
 } from "./leadApi";
+import {
+  cancelFollowUpTask,
+  updateFollowUpTaskStatus
+} from "../follow-up-tasks/followUpTaskApi";
 
 const pipelineStatusOptions: Array<{ label: string; value: LeadPipelineStatus }> = [
   { label: "New", value: "NEW" },
@@ -38,6 +43,12 @@ const activityTypeOptions: Array<{ label: string; value: LeadActivityType }> = [
   { label: "Chat", value: "CHAT" },
   { label: "Meeting", value: "MEETING" },
   { label: "Other", value: "OTHER" }
+];
+
+const taskPriorityOptions = [
+  { label: "High", value: "HIGH" },
+  { label: "Medium", value: "MEDIUM" },
+  { label: "Low", value: "LOW" }
 ];
 
 function statusTone(status: string) {
@@ -82,6 +93,7 @@ export function LeadDetailPage() {
   const [activityContent, setActivityContent] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("");
+  const [taskPriority, setTaskPriority] = useState("MEDIUM");
 
   const leadQuery = useQuery({
     enabled: Boolean(id),
@@ -121,12 +133,29 @@ export function LeadDetailPage() {
     }
   });
   const taskMutation = useMutation({
-    mutationFn: () => createFollowUpTask(id ?? "", { dueAt: taskDueAt || undefined, title: taskTitle.trim() }),
+    mutationFn: () => createFollowUpTask(id ?? "", {
+      dueAt: taskDueAt ? toIsoDateTime(taskDueAt) : undefined,
+      priority: taskPriority,
+      title: taskTitle.trim()
+    }),
     onSuccess: () => {
       setTaskTitle("");
       setTaskDueAt("");
+      setTaskPriority("MEDIUM");
       return invalidateLeadData();
     }
+  });
+  const completeTaskMutation = useMutation({
+    mutationFn: (taskId: number | string) =>
+      updateFollowUpTaskStatus(taskId, {
+        completedAt: new Date().toISOString(),
+        status: "COMPLETED"
+      }),
+    onSuccess: invalidateLeadData
+  });
+  const cancelTaskMutation = useMutation({
+    mutationFn: cancelFollowUpTask,
+    onSuccess: invalidateLeadData
   });
   const scoreMutation = useMutation({
     mutationFn: () => scoreLead(id ?? "")
@@ -139,6 +168,8 @@ export function LeadDetailPage() {
     noteMutation.error ??
     activityMutation.error ??
     taskMutation.error ??
+    completeTaskMutation.error ??
+    cancelTaskMutation.error ??
     scoreMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
 
@@ -346,6 +377,7 @@ export function LeadDetailPage() {
         <form className="lead-task-form" onSubmit={submitTask}>
           <Input label="Task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
           <Input label="Due at" type="datetime-local" value={taskDueAt} onChange={(event) => setTaskDueAt(event.target.value)} />
+          <Select label="Priority" options={taskPriorityOptions} value={taskPriority} onChange={(event) => setTaskPriority(event.target.value)} />
           <Button type="submit" disabled={!taskTitle.trim() || taskMutation.isPending}>
             Create follow-up task
           </Button>
@@ -354,7 +386,28 @@ export function LeadDetailPage() {
           {lead.followUpTasks.length ? lead.followUpTasks.map((task) => (
             <article key={task.id}>
               <strong>{task.title}</strong>
-              {task.dueAt ? <small>{task.dueAt}</small> : null}
+              <small>{task.status} / {task.priority}</small>
+              {task.dueAt ? <small>{formatAppointmentDateTime(task.dueAt)}</small> : null}
+              <div className="task-action-row">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={completeTaskMutation.isPending || task.status === "COMPLETED"}
+                  onClick={() => completeTaskMutation.mutate(task.id)}
+                >
+                  <CheckCircle2 size={16} />
+                  Complete
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={cancelTaskMutation.isPending || task.status === "CANCELLED"}
+                  onClick={() => cancelTaskMutation.mutate(task.id)}
+                >
+                  <Trash2 size={16} />
+                  Cancel
+                </Button>
+              </div>
             </article>
           )) : <p className="muted">No follow-up tasks.</p>}
         </div>

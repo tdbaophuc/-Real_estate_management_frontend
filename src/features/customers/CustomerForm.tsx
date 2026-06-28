@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Save } from "lucide-react";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import { getLeadSources } from "../master-data/masterDataApi";
 import type { CustomerRecord, CustomerUpsertRequest } from "./customerApi";
 
 const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
@@ -21,7 +23,7 @@ const customerFormSchema = z
     phone: z.string().trim().optional(),
     preferredContactMethod: z.string().trim().optional(),
     priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
-    source: z.enum(["MANUAL", "WEBSITE", "REFERRAL", "IMPORT", "OTHER"]),
+    source: z.string().trim().min(1, "Source is required"),
     status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]),
     userId: optionalNumber
   })
@@ -94,13 +96,7 @@ function toDefaultValues(customer?: CustomerRecord): CustomerFormValues {
     phone: customer?.phone ?? "",
     preferredContactMethod: customer?.preferredContactMethod ?? "PHONE",
     priority: customer?.priority === "LOW" || customer?.priority === "HIGH" ? customer.priority : "MEDIUM",
-    source:
-      customer?.source === "WEBSITE" ||
-      customer?.source === "REFERRAL" ||
-      customer?.source === "IMPORT" ||
-      customer?.source === "OTHER"
-        ? customer.source
-        : "MANUAL",
+    source: customer?.source ?? "MANUAL",
     status:
       customer?.status === "INACTIVE" || customer?.status === "ARCHIVED"
         ? customer.status
@@ -129,6 +125,26 @@ export function CustomerForm({
 }) {
   const [formError, setFormError] = useState<string | null>(null);
   const defaultValues = useMemo(() => toDefaultValues(customer), [customer]);
+  const leadSourcesQuery = useQuery({
+    queryFn: getLeadSources,
+    queryKey: ["master-data", "lead-sources"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const resolvedSourceOptions = useMemo(() => {
+    const options = leadSourcesQuery.data?.length
+      ? leadSourcesQuery.data.map((source) => ({
+          label: source.name,
+          value: source.code
+        }))
+      : sourceOptions;
+
+    if (defaultValues.source && !options.some((option) => option.value === defaultValues.source)) {
+      return [...options, { label: `Current ${defaultValues.source}`, value: defaultValues.source }];
+    }
+
+    return options;
+  }, [defaultValues.source, leadSourcesQuery.data]);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -184,7 +200,13 @@ export function CustomerForm({
         />
       </FormSection>
       <FormSection title="Ownership">
-        <Select label="Source" options={sourceOptions} error={errors.source?.message} {...register("source")} />
+        <Select
+          label="Source"
+          options={resolvedSourceOptions}
+          error={errors.source?.message}
+          disabled={leadSourcesQuery.isLoading}
+          {...register("source")}
+        />
         <Input label="Assigned agent id" error={errors.assignedAgentId?.message} {...register("assignedAgentId")} />
         <Input label="Notes" error={errors.notes?.message} {...register("notes")} />
       </FormSection>

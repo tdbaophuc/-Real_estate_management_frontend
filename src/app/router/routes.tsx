@@ -24,6 +24,7 @@ import { ListingFormPage } from "../../features/listings/ListingFormPage";
 import { ListingsPage } from "../../features/listings/ListingsPage";
 import { LeadDetailPage } from "../../features/leads/LeadDetailPage";
 import { LeadsPage } from "../../features/leads/LeadsPage";
+import { FollowUpTasksPage } from "../../features/follow-up-tasks/FollowUpTasksPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
@@ -164,6 +165,14 @@ export const router: Router = createBrowserRouter([
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
                 <LeadDetailPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/follow-up-tasks",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <FollowUpTasksPage />
               </RoleGuard>
             )
           },

@@ -58,7 +58,7 @@ export type CustomerUpsertRequest = {
   phone?: string;
   preferredContactMethod?: string;
   priority: CustomerPriority;
-  source: CustomerSource;
+  source: CustomerSource | string;
   status: CustomerStatus;
   userId?: number;
 };

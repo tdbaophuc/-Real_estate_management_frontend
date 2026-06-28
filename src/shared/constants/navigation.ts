@@ -10,6 +10,7 @@ export type NavigationItem = {
   | "listings"
   | "customers"
   | "leads"
+  | "tasks"
   | "appointments"
   | "contracts"
   | "transactions"
@@ -56,6 +57,12 @@ export const navigationItems: NavigationItem[] = [
     href: "/leads",
     label: "Leads",
     icon: "leads",
+    roles: ["ADMIN", "MANAGER", "AGENT"]
+  },
+  {
+    href: "/follow-up-tasks",
+    label: "Follow-up Tasks",
+    icon: "tasks",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {

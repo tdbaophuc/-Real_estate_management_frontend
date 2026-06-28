@@ -43,8 +43,11 @@ export type LeadActivity = {
 };
 
 export type FollowUpTask = {
+  description: string;
   dueAt: string;
   id: number | string;
+  priority: string;
+  status: string;
   title: string;
 };
 
@@ -149,8 +152,11 @@ function normalizeActivity(source: BackendRecord, index = 0): LeadActivity {
 
 function normalizeTask(source: BackendRecord, index = 0): FollowUpTask {
   return {
+    description: readString(source, ["description", "content"]),
     dueAt: readString(source, ["dueAt", "dueDate", "scheduledAt"]),
     id: readNumber(source, ["id", "taskId"]) ?? readString(source, ["id", "taskId"], String(index)),
+    priority: readString(source, ["priority"], "MEDIUM"),
+    status: readString(source, ["status"], "PENDING"),
     title: readString(source, ["title", "content", "description"], "Follow-up task")
   };
 }
@@ -223,7 +229,10 @@ export function addLeadActivity(leadId: number | string, request: { content: str
     .then(normalizeActivity);
 }
 
-export function createFollowUpTask(leadId: number | string, request: { dueAt?: string; title: string }) {
+export function createFollowUpTask(
+  leadId: number | string,
+  request: { assignedAgentId?: number; description?: string; dueAt?: string; priority?: string; title: string }
+) {
   return apiClient
     .post<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/follow-up-tasks`, request)
     .then(normalizeTask);
