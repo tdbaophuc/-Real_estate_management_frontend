@@ -18,6 +18,7 @@ export type ContractDocument = {
   description: string;
   displayName: string;
   documentType: string;
+  fileId: number | string | null;
   id: number | string;
   primaryDocument: boolean;
   url: string;
@@ -150,13 +151,24 @@ function readRecordArray(source: BackendRecord, keys: string[]) {
 }
 
 function normalizeDocument(source: BackendRecord, index = 0): ContractDocument {
+  const file = source.file && typeof source.file === "object" && !Array.isArray(source.file)
+    ? (source.file as BackendRecord)
+    : source.fileResource && typeof source.fileResource === "object" && !Array.isArray(source.fileResource)
+      ? (source.fileResource as BackendRecord)
+      : null;
+  const fileId =
+    readNumber(source, ["fileId", "fileResourceId"]) ??
+    (file ? readNumber(file, ["id", "fileId"]) : null) ??
+    readString(source, ["fileId", "fileResourceId"]);
+
   return {
     description: readString(source, ["description"]),
     displayName: readString(source, ["displayName", "name", "fileName"], "Document"),
     documentType: readString(source, ["documentType", "type"], "ATTACHMENT"),
+    fileId: fileId || null,
     id: readNumber(source, ["id", "documentId"]) ?? readString(source, ["id", "documentId"], String(index)),
     primaryDocument: readBoolean(source, ["primaryDocument", "primary"]),
-    url: readString(source, ["url", "fileUrl", "downloadUrl", "publicUrl"])
+    url: readString(source, ["url", "fileUrl", "downloadUrl", "publicUrl"]) || (file ? readString(file, ["publicUrl", "url"]) : "")
   };
 }
 

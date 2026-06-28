@@ -199,6 +199,21 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 export const apiClient = {
   delete: <T>(path: string, options?: ApiRequestOptions) =>
     apiRequest<T>(path, { ...options, method: "DELETE" }),
+  downloadBlob: async (path: string, options: ApiRequestOptions = {}) => {
+    const { body: _body, query, skipAuth, skipRefresh, ...fetchOptions } = options;
+    const response = await fetch(createUrl(path, query), {
+      ...fetchOptions,
+      headers: createHeaders({ ...options, skipAuth, skipRefresh }, false),
+      method: options.method ?? "GET"
+    });
+
+    if (!response.ok) {
+      const parsedBody = await parseResponse(response);
+      throw normalizeApiError(response.status, parsedBody, response.statusText);
+    }
+
+    return response.blob();
+  },
   get: <T>(path: string, options?: ApiRequestOptions) =>
     apiRequest<T>(path, { ...options, method: "GET" }),
   patch: <T>(path: string, body?: ApiRequestOptions["body"], options?: ApiRequestOptions) =>

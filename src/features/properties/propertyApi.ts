@@ -103,6 +103,39 @@ export type PropertyImageUploadRequest = {
   file: File;
 };
 
+export type PropertyLegalDocument = {
+  documentNumber: string;
+  documentType: string;
+  expiryDate: string;
+  fileId: number | string | null;
+  fileName: string;
+  id: number | string;
+  issuedBy: string;
+  issuedDate: string;
+  notes: string;
+  publicUrl?: string;
+  uploadedAt: string;
+  verificationNotes: string;
+  verificationStatus: string;
+};
+
+export type LegalDocumentUploadRequest = {
+  documentNumber?: string;
+  documentType: string;
+  expiryDate?: string;
+  file: File;
+  issuedBy?: string;
+  issuedDate?: string;
+  notes?: string;
+};
+
+export type LegalDocumentUpdateRequest = Omit<LegalDocumentUploadRequest, "file">;
+
+export type LegalDocumentVerificationRequest = {
+  notes?: string;
+  verificationStatus: string;
+};
+
 type BackendRecord = Record<string, unknown>;
 
 function readString(source: BackendRecord, keys: string[], fallback = "") {
@@ -154,6 +187,18 @@ function readNestedRecord(source: BackendRecord, key: string) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as BackendRecord)
     : null;
+}
+
+function readRecordArray(source: BackendRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (Array.isArray(value)) {
+      return value.filter((item): item is BackendRecord => Boolean(item) && typeof item === "object");
+    }
+  }
+
+  return [];
 }
 
 function readPurpose(value: string): PropertyPurpose | null {
@@ -241,6 +286,34 @@ function readImages(source: BackendRecord): PropertyImage[] {
     })
     .filter((image): image is PropertyImage => Boolean(image))
     .sort((first, second) => first.displayOrder - second.displayOrder);
+}
+
+function normalizeLegalDocument(source: BackendRecord, index = 0): PropertyLegalDocument {
+  const file = readNestedRecord(source, "file") ?? readNestedRecord(source, "fileResource");
+  const id = readNumber(source, ["id", "documentId"]) ?? readString(source, ["id", "documentId"], String(index));
+  const fileId =
+    readNumber(source, ["fileId", "fileResourceId"]) ??
+    (file ? readNumber(file, ["id", "fileId"]) : null) ??
+    readString(source, ["fileId", "fileResourceId"]);
+
+  return {
+    documentNumber: readString(source, ["documentNumber", "number"]),
+    documentType: readString(source, ["documentType", "type"], "OTHER"),
+    expiryDate: readString(source, ["expiryDate"]),
+    fileId: fileId || null,
+    fileName:
+      readString(source, ["fileName", "displayName", "originalFileName"]) ||
+      (file ? readString(file, ["fileName", "originalFileName", "displayName"]) : "") ||
+      "Legal document",
+    id,
+    issuedBy: readString(source, ["issuedBy"]),
+    issuedDate: readString(source, ["issuedDate"]),
+    notes: readString(source, ["notes", "description"]),
+    publicUrl: readString(source, ["publicUrl", "url", "downloadUrl"]) || (file ? readString(file, ["publicUrl", "url"]) : "") || undefined,
+    uploadedAt: readString(source, ["uploadedAt", "createdAt"]),
+    verificationNotes: readString(source, ["verificationNotes", "reviewNotes", "verifiedNotes"]),
+    verificationStatus: readString(source, ["verificationStatus", "status"], "PENDING")
+  };
 }
 
 function normalizeProperty(property: BackendRecord): PropertyRecord {
@@ -347,6 +420,69 @@ export function deletePropertyImage(propertyId: number | string, imageId: number
 export function setPropertyCoverImage(propertyId: number | string, imageId: number | string) {
   return apiClient.patch<void>(
     `/properties/${encodeURIComponent(String(propertyId))}/cover-image/${encodeURIComponent(String(imageId))}`
+  );
+}
+
+export function getPropertyLegalDocuments(propertyId: number | string) {
+  return apiClient
+    .get<BackendRecord[]>(`/properties/${encodeURIComponent(String(propertyId))}/legal-documents`)
+    .then((documents) => readRecordArray({ documents }, ["documents"]).map(normalizeLegalDocument));
+}
+
+export function uploadPropertyLegalDocument(
+  propertyId: number | string,
+  request: LegalDocumentUploadRequest
+) {
+  return apiClient
+    .upload<BackendRecord>(`/properties/${encodeURIComponent(String(propertyId))}/legal-documents`, {
+      documentNumber: request.documentNumber,
+      documentType: request.documentType,
+      expiryDate: request.expiryDate,
+      file: request.file,
+      issuedBy: request.issuedBy,
+      issuedDate: request.issuedDate,
+      notes: request.notes
+    })
+    .then(normalizeLegalDocument);
+}
+
+export function getPropertyLegalDocument(propertyId: number | string, documentId: number | string) {
+  return apiClient
+    .get<BackendRecord>(
+      `/properties/${encodeURIComponent(String(propertyId))}/legal-documents/${encodeURIComponent(String(documentId))}`
+    )
+    .then(normalizeLegalDocument);
+}
+
+export function updatePropertyLegalDocument(
+  propertyId: number | string,
+  documentId: number | string,
+  request: LegalDocumentUpdateRequest
+) {
+  return apiClient
+    .patch<BackendRecord>(
+      `/properties/${encodeURIComponent(String(propertyId))}/legal-documents/${encodeURIComponent(String(documentId))}`,
+      request
+    )
+    .then(normalizeLegalDocument);
+}
+
+export function verifyPropertyLegalDocument(
+  propertyId: number | string,
+  documentId: number | string,
+  request: LegalDocumentVerificationRequest
+) {
+  return apiClient
+    .patch<BackendRecord>(
+      `/properties/${encodeURIComponent(String(propertyId))}/legal-documents/${encodeURIComponent(String(documentId))}/verify`,
+      request
+    )
+    .then(normalizeLegalDocument);
+}
+
+export function deletePropertyLegalDocument(propertyId: number | string, documentId: number | string) {
+  return apiClient.delete<void>(
+    `/properties/${encodeURIComponent(String(propertyId))}/legal-documents/${encodeURIComponent(String(documentId))}`
   );
 }
 

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, FileUp, Send, Signature, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileUp, Send, Signature, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { downloadFile, updateFileAccessLevel, type FileAccessLevel } from "../../shared/api/fileApi";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { Dialog } from "../../shared/ui/Dialog";
@@ -166,11 +167,36 @@ export function ContractDetailPage() {
       return invalidateContractData();
     }
   });
+  const documentDownloadMutation = useMutation({
+    mutationFn: (document: { displayName: string; fileId: number | string | null; url: string }) => {
+      if (document.fileId) {
+        return downloadFile(document.fileId, document.displayName);
+      }
+
+      if (document.url) {
+        window.open(document.url, "_blank", "noopener,noreferrer");
+        return Promise.resolve();
+      }
+
+      throw new Error("No downloadable file is linked to this document.");
+    }
+  });
+  const accessMutation = useMutation({
+    mutationFn: ({ accessLevel, fileId }: { accessLevel: FileAccessLevel; fileId: number | string }) =>
+      updateFileAccessLevel(fileId, accessLevel),
+    onSuccess: invalidateContractData
+  });
   const contract = contractQuery.data;
   const normalizedError = contractQuery.error ? normalizeUnknownError(contractQuery.error) : null;
-  const actionError = updateMutation.error ?? uploadMutation.error ?? workflowMutation.error;
+  const actionError =
+    updateMutation.error ??
+    uploadMutation.error ??
+    workflowMutation.error ??
+    documentDownloadMutation.error ??
+    accessMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const availableActions = contract ? getAvailableActions(contract.status, user?.roles ?? []) : [];
+  const canManageFileAccess = hasAnyRole(user?.roles ?? [], ["ADMIN", "MANAGER"]);
 
   if (!id) {
     return (
@@ -295,7 +321,37 @@ export function ContractDetailPage() {
                 <strong>{document.displayName}</strong>
                 <small>{document.documentType}{document.primaryDocument ? " / primary" : ""}</small>
                 {document.description ? <small>{document.description}</small> : null}
-                {document.url ? <a href={document.url} target="_blank" rel="noreferrer">Open document</a> : null}
+                <div className="contract-document-actions">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={documentDownloadMutation.isPending}
+                    onClick={() => documentDownloadMutation.mutate(document)}
+                  >
+                    <Download size={16} />
+                    Download
+                  </Button>
+                  {canManageFileAccess && document.fileId ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={accessMutation.isPending}
+                        onClick={() => accessMutation.mutate({ accessLevel: "PUBLIC", fileId: document.fileId as number | string })}
+                      >
+                        Public
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={accessMutation.isPending}
+                        onClick={() => accessMutation.mutate({ accessLevel: "PRIVATE", fileId: document.fileId as number | string })}
+                      >
+                        Private
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
               </article>
             )) : <p className="muted">No documents uploaded.</p>}
           </div>

@@ -8,7 +8,9 @@ import {
   Building2,
   CheckCircle2,
   Copy,
+  Download,
   Edit,
+  FileText,
   FilePlus2,
   Home,
   ImagePlus,
@@ -20,6 +22,8 @@ import {
   UserRound
 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { downloadFile, updateFileAccessLevel, type FileAccessLevel } from "../../shared/api/fileApi";
+import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -33,13 +37,21 @@ import { formatCurrency } from "../../shared/lib/format";
 import { analyzePropertyImage, type ImageAnalysisSuggestion } from "../ai/aiApi";
 import {
   deletePropertyImage,
+  deletePropertyLegalDocument,
   getProperty,
   getPropertyImages,
+  getPropertyLegalDocuments,
   setPropertyCoverImage,
+  type LegalDocumentUpdateRequest,
+  type LegalDocumentVerificationRequest,
+  type PropertyLegalDocument,
   type PropertyImage,
   type PropertyRecord,
   updatePropertyStatus,
-  uploadPropertyImage
+  updatePropertyLegalDocument,
+  uploadPropertyImage,
+  uploadPropertyLegalDocument,
+  verifyPropertyLegalDocument
 } from "./propertyApi";
 
 const propertyStatusOptions = [
@@ -336,9 +348,336 @@ function ImageManagementPanel({
   );
 }
 
+const legalDocumentTypeOptions = [
+  { label: "Pink book", value: "PINK_BOOK" },
+  { label: "Land use certificate", value: "LAND_USE_CERTIFICATE" },
+  { label: "Sale contract", value: "SALE_CONTRACT" },
+  { label: "Construction permit", value: "CONSTRUCTION_PERMIT" },
+  { label: "Other", value: "OTHER" }
+];
+
+const verificationStatusOptions = [
+  { label: "Verified", value: "VERIFIED" },
+  { label: "Rejected", value: "REJECTED" },
+  { label: "Pending", value: "PENDING" }
+];
+
+function legalStatusTone(status: string) {
+  if (status === "VERIFIED") {
+    return "success";
+  }
+
+  if (status === "REJECTED") {
+    return "danger";
+  }
+
+  return "warning";
+}
+
+function hasAnyRole(roles: string[], allowedRoles: string[]) {
+  return roles.some((role) => allowedRoles.includes(role));
+}
+
+function LegalDocumentsPanel({
+  documents,
+  isLoading,
+  onChanged,
+  propertyId,
+  roles
+}: {
+  documents: PropertyLegalDocument[];
+  isLoading: boolean;
+  onChanged: () => Promise<unknown>;
+  propertyId: number | string;
+  roles: string[];
+}) {
+  const canVerify = hasAnyRole(roles, ["ADMIN", "MANAGER"]);
+  const canManageAccess = canVerify;
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState("PINK_BOOK");
+  const [documentNumber, setDocumentNumber] = useState("");
+  const [issuedBy, setIssuedBy] = useState("");
+  const [issuedDate, setIssuedDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [editingId, setEditingId] = useState<number | string | null>(null);
+  const [editDraft, setEditDraft] = useState<LegalDocumentUpdateRequest>({
+    documentType: "PINK_BOOK"
+  });
+  const [verificationDrafts, setVerificationDrafts] = useState<Record<string, string>>({});
+  const uploadMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedFile) {
+        throw new Error("Choose a legal document to upload.");
+      }
+
+      return uploadPropertyLegalDocument(propertyId, {
+        documentNumber,
+        documentType,
+        expiryDate: expiryDate || undefined,
+        file: selectedFile,
+        issuedBy: issuedBy || undefined,
+        issuedDate: issuedDate || undefined,
+        notes: notes || undefined
+      });
+    },
+    onSuccess: () => {
+      setSelectedFile(null);
+      setDocumentNumber("");
+      setIssuedBy("");
+      setIssuedDate("");
+      setExpiryDate("");
+      setNotes("");
+      return onChanged();
+    }
+  });
+  const updateMutation = useMutation({
+    mutationFn: ({ documentId, request }: { documentId: number | string; request: LegalDocumentUpdateRequest }) =>
+      updatePropertyLegalDocument(propertyId, documentId, request),
+    onSuccess: () => {
+      setEditingId(null);
+      return onChanged();
+    }
+  });
+  const verifyMutation = useMutation({
+    mutationFn: ({ documentId, request }: { documentId: number | string; request: LegalDocumentVerificationRequest }) =>
+      verifyPropertyLegalDocument(propertyId, documentId, request),
+    onSuccess: onChanged
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (documentId: number | string) => deletePropertyLegalDocument(propertyId, documentId),
+    onSuccess: onChanged
+  });
+  const downloadMutation = useMutation({
+    mutationFn: (document: PropertyLegalDocument) => {
+      if (document.fileId) {
+        return downloadFile(document.fileId, document.fileName);
+      }
+
+      if (document.publicUrl) {
+        window.open(document.publicUrl, "_blank", "noopener,noreferrer");
+        return Promise.resolve();
+      }
+
+      throw new Error("No downloadable file is linked to this document.");
+    }
+  });
+  const accessMutation = useMutation({
+    mutationFn: ({ accessLevel, fileId }: { accessLevel: FileAccessLevel; fileId: number | string }) =>
+      updateFileAccessLevel(fileId, accessLevel),
+    onSuccess: onChanged
+  });
+  const actionError =
+    uploadMutation.error ??
+    updateMutation.error ??
+    verifyMutation.error ??
+    deleteMutation.error ??
+    downloadMutation.error ??
+    accessMutation.error;
+  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+
+  function startEdit(document: PropertyLegalDocument) {
+    setEditingId(document.id);
+    setEditDraft({
+      documentNumber: document.documentNumber || undefined,
+      documentType: document.documentType,
+      expiryDate: document.expiryDate || undefined,
+      issuedBy: document.issuedBy || undefined,
+      issuedDate: document.issuedDate || undefined,
+      notes: document.notes || undefined
+    });
+  }
+
+  function updateVerificationNotes(documentId: number | string, value: string) {
+    setVerificationDrafts((current) => ({
+      ...current,
+      [String(documentId)]: value
+    }));
+  }
+
+  return (
+    <section className="content-section property-legal-documents">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">Legal</p>
+          <h2>Legal documents</h2>
+        </div>
+        <FileText size={20} />
+      </div>
+      <form
+        className="legal-document-upload"
+        onSubmit={(event) => {
+          event.preventDefault();
+          uploadMutation.mutate();
+        }}
+      >
+        <FileUploader onFilesSelected={(files) => setSelectedFile(files[0] ?? null)} />
+        <Select
+          label="Document type"
+          options={legalDocumentTypeOptions}
+          value={documentType}
+          onChange={(event) => setDocumentType(event.target.value)}
+        />
+        <Input label="Document number" value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} />
+        <Input label="Issued by" value={issuedBy} onChange={(event) => setIssuedBy(event.target.value)} />
+        <Input label="Issued date" type="date" value={issuedDate} onChange={(event) => setIssuedDate(event.target.value)} />
+        <Input label="Expiry date" type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} />
+        <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+        <Button type="submit" disabled={!selectedFile || uploadMutation.isPending}>
+          <FilePlus2 size={16} />
+          Upload document
+        </Button>
+      </form>
+      {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
+      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
+      {isLoading ? <EmptyState title="Loading legal documents" description="Checking property document records." /> : null}
+      {!isLoading ? (
+        <div className="legal-document-list">
+          {documents.length ? (
+            documents.map((document) => (
+              <article className="legal-document-row" key={document.id}>
+                <div>
+                  <div className="detail-badges">
+                    <StatusBadge tone={legalStatusTone(document.verificationStatus)}>
+                      {enumLabel(document.verificationStatus)}
+                    </StatusBadge>
+                    <StatusBadge tone="info">{enumLabel(document.documentType)}</StatusBadge>
+                  </div>
+                  <h3>{document.fileName}</h3>
+                  <p className="muted">
+                    {[document.documentNumber, document.issuedBy, document.issuedDate].filter(Boolean).join(" / ") || "Metadata updating"}
+                  </p>
+                  {document.notes ? <p>{document.notes}</p> : null}
+                </div>
+                {editingId === document.id ? (
+                  <form
+                    className="legal-document-edit"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      updateMutation.mutate({ documentId: document.id, request: editDraft });
+                    }}
+                  >
+                    <Select
+                      label="Document type"
+                      options={legalDocumentTypeOptions}
+                      value={editDraft.documentType}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, documentType: event.target.value }))}
+                    />
+                    <Input
+                      label="Document number"
+                      value={editDraft.documentNumber ?? ""}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, documentNumber: event.target.value }))}
+                    />
+                    <Input
+                      label="Issued by"
+                      value={editDraft.issuedBy ?? ""}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, issuedBy: event.target.value }))}
+                    />
+                    <Input
+                      label="Issued date"
+                      type="date"
+                      value={editDraft.issuedDate ?? ""}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, issuedDate: event.target.value }))}
+                    />
+                    <Input
+                      label="Expiry date"
+                      type="date"
+                      value={editDraft.expiryDate ?? ""}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, expiryDate: event.target.value }))}
+                    />
+                    <Input
+                      label="Notes"
+                      value={editDraft.notes ?? ""}
+                      onChange={(event) => setEditDraft((current) => ({ ...current, notes: event.target.value }))}
+                    />
+                    <div className="legal-document-actions">
+                      <Button type="submit" size="sm" disabled={updateMutation.isPending}>Save</Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => setEditingId(null)}>Cancel</Button>
+                    </div>
+                  </form>
+                ) : null}
+                <div className="legal-document-actions">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={downloadMutation.isPending}
+                    onClick={() => downloadMutation.mutate(document)}
+                  >
+                    <Download size={16} />
+                    Download
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => startEdit(document)}>
+                    <Edit size={16} />
+                    Edit
+                  </Button>
+                  {canVerify ? (
+                    <>
+                      <Select
+                        label="Verification"
+                        options={verificationStatusOptions}
+                        defaultValue={document.verificationStatus}
+                        onChange={(event) =>
+                          verifyMutation.mutate({
+                            documentId: document.id,
+                            request: {
+                              notes: verificationDrafts[String(document.id)] || undefined,
+                              verificationStatus: event.target.value
+                            }
+                          })
+                        }
+                      />
+                      <Input
+                        label="Review notes"
+                        value={verificationDrafts[String(document.id)] ?? ""}
+                        onChange={(event) => updateVerificationNotes(document.id, event.target.value)}
+                      />
+                    </>
+                  ) : null}
+                  {canManageAccess && document.fileId ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={accessMutation.isPending}
+                        onClick={() => accessMutation.mutate({ accessLevel: "PUBLIC", fileId: document.fileId as number | string })}
+                      >
+                        Public
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={accessMutation.isPending}
+                        onClick={() => accessMutation.mutate({ accessLevel: "PRIVATE", fileId: document.fileId as number | string })}
+                      >
+                        Private
+                      </Button>
+                    </>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(document.id)}
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </Button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <EmptyState title="No legal documents" description="Upload ownership, certificate, or contract records for this property." />
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function PropertyDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [nextStatus, setNextStatus] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
   const propertyQuery = useQuery({
@@ -353,6 +692,12 @@ export function PropertyDetailPage() {
     queryKey: ["property", id, "images"],
     retry: 1
   });
+  const legalDocumentsQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => getPropertyLegalDocuments(id ?? ""),
+    queryKey: ["property", id, "legal-documents"],
+    retry: 1
+  });
   const normalizedError = propertyQuery.error
     ? normalizeUnknownError(propertyQuery.error)
     : null;
@@ -365,6 +710,7 @@ export function PropertyDetailPage() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["property", id] }),
       queryClient.invalidateQueries({ queryKey: ["property", id, "images"] }),
+      queryClient.invalidateQueries({ queryKey: ["property", id, "legal-documents"] }),
       queryClient.invalidateQueries({ queryKey: ["properties"] })
     ]);
   const uploadMutation = useMutation({
@@ -475,6 +821,13 @@ export function PropertyDetailPage() {
             onDelete={(imageId) => deleteMutation.mutate(imageId)}
             onSetCover={(imageId) => coverMutation.mutate(imageId)}
             propertyId={property.id}
+          />
+          <LegalDocumentsPanel
+            documents={legalDocumentsQuery.data ?? []}
+            isLoading={legalDocumentsQuery.isLoading}
+            onChanged={invalidatePropertyData}
+            propertyId={property.id}
+            roles={user?.roles ?? []}
           />
           {normalizedActionError ? (
             <div className="form-error" role="alert">

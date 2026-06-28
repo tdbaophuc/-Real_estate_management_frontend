@@ -89,6 +89,19 @@ export function getFileDownloadUrl(fileId: number | string) {
   return createApiUrl(`/files/${encodeURIComponent(String(fileId))}/download`);
 }
 
+export async function downloadFile(fileId: number | string, fileName = "download") {
+  const blob = await apiClient.downloadBlob(`/files/${encodeURIComponent(String(fileId))}/download`);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function deleteFile(fileId: number | string) {
   return apiClient.delete<void>(`/files/${encodeURIComponent(String(fileId))}`);
 }
