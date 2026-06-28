@@ -28,9 +28,12 @@ export type PropertyPerson = {
 };
 
 export type PropertyAddress = {
+  districtId?: number | null;
   fullAddress: string;
   latitude?: number | null;
   longitude?: number | null;
+  provinceId?: number | null;
+  wardId?: number | null;
 };
 
 export type PropertyRecord = {
@@ -181,9 +184,12 @@ function readAddress(source: BackendRecord): PropertyAddress {
 
   if (directAddress) {
     return {
+      districtId: readNumber(address, ["districtId"]),
       fullAddress: directAddress,
       latitude: readNumber(address, ["latitude"]),
-      longitude: readNumber(address, ["longitude"])
+      longitude: readNumber(address, ["longitude"]),
+      provinceId: readNumber(address, ["provinceId"]),
+      wardId: readNumber(address, ["wardId"])
     };
   }
 
@@ -196,9 +202,12 @@ function readAddress(source: BackendRecord): PropertyAddress {
   ].filter(Boolean);
 
   return {
+    districtId: readNumber(address, ["districtId"]),
     fullAddress: parts.length ? parts.join(", ") : "Address updating",
     latitude: readNumber(address, ["latitude"]),
-    longitude: readNumber(address, ["longitude"])
+    longitude: readNumber(address, ["longitude"]),
+    provinceId: readNumber(address, ["provinceId"]),
+    wardId: readNumber(address, ["wardId"])
   };
 }
 

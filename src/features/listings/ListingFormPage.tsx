@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Rocket, Save, Send, Sparkles, XCircle } from "lucide-react";
@@ -16,6 +16,7 @@ import type { RoleCode } from "../../shared/types/auth";
 import {
   createListing,
   generateListingDescription,
+  getListing,
   runListingWorkflowAction,
   updateListing,
   type ListingDescriptionSuggestion,
@@ -24,7 +25,7 @@ import {
   type ListingUpdateRequest,
   type ListingWorkflowAction
 } from "./listingApi";
-import { getStoredListing, saveListingWorkflowState } from "./listingWorkflowState";
+import { getListingPackages } from "../master-data/masterDataApi";
 
 const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
 const requiredNumber = z.string().trim().min(1, "Required").refine((value) => !Number.isNaN(Number(value)), "Must be a number");
@@ -211,12 +212,19 @@ export function ListingFormPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isEditMode = Boolean(id);
-  const [workflowListing, setWorkflowListing] = useState<ListingRecord | null>(
-    () =>
-      id
-        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
-        : null
-  );
+  const [workflowListing, setWorkflowListing] = useState<ListingRecord | null>(null);
+  const listingQuery = useQuery({
+    enabled: isEditMode,
+    queryFn: () => getListing(id ?? ""),
+    queryKey: ["listing", id],
+    retry: 1
+  });
+  const packagesQuery = useQuery({
+    queryFn: getListingPackages,
+    queryKey: ["master-data", "listing-packages"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
   const defaultValues = useMemo(
     () => toDefaultValues(workflowListing, searchParams.get("propertyId") ?? ""),
     [searchParams, workflowListing]
@@ -244,7 +252,10 @@ export function ListingFormPage() {
   });
   const saveMutation = useMutation({
     mutationFn: (values: ListingFormValues) =>
-      isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values))
+      isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values)),
+    onSuccess: (saved) => {
+      persistWorkflowListing(saved);
+    }
   });
   const workflowMutation = useMutation({
     mutationFn: ({ action, reason }: { action: ListingWorkflowAction; reason?: string }) => {
@@ -282,23 +293,43 @@ export function ListingFormPage() {
     : [];
   const actionError = workflowMutation.error ?? aiMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+  const listingLoadError = listingQuery.error ? normalizeUnknownError(listingQuery.error) : null;
+  const listingPackageOptions = useMemo(() => {
+    const options = [
+      { label: "No package", value: "" },
+      ...(packagesQuery.data ?? []).map((item) => ({
+        label: `${item.name}${item.price ? ` / ${item.price.toLocaleString("vi-VN")} ${item.currency ?? "VND"}` : ""}`,
+        value: String(item.id)
+      }))
+    ];
+
+    if (
+      workflowListing?.listingPackageId &&
+      !options.some((option) => option.value === String(workflowListing.listingPackageId))
+    ) {
+      options.push({
+        label: workflowListing.listingPackage?.name ?? `Package #${workflowListing.listingPackageId}`,
+        value: String(workflowListing.listingPackageId)
+      });
+    }
+
+    return options;
+  }, [packagesQuery.data, workflowListing?.listingPackage?.name, workflowListing?.listingPackageId]);
 
   useEffect(() => {
     reset(defaultValues);
   }, [defaultValues, reset]);
 
   useEffect(() => {
-    setWorkflowListing(
-      id
-        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
-        : null
-    );
-  }, [id, queryClient]);
+    if (listingQuery.data) {
+      setWorkflowListing(listingQuery.data);
+    }
+  }, [listingQuery.data]);
 
   function persistWorkflowListing(saved: ListingRecord) {
     setWorkflowListing(saved);
-    queryClient.setQueryData(["listing-workflow", saved.id], saved);
-    saveListingWorkflowState(saved);
+    queryClient.setQueryData(["listing", String(saved.id)], saved);
+    void queryClient.invalidateQueries({ queryKey: ["listings"] });
   }
 
   function applyGeneratedSlug() {
@@ -310,7 +341,6 @@ export function ListingFormPage() {
 
     try {
       const saved = await saveMutation.mutateAsync(values);
-      persistWorkflowListing(saved);
       navigate(`/listings/${saved.id}/edit`, { replace: true });
     } catch (error) {
       const normalizedError = normalizeUnknownError(error);
@@ -375,15 +405,15 @@ export function ListingFormPage() {
   if (isEditMode && !workflowListing) {
     return (
       <section className="content-section">
-        <EmptyState
-          title="Listing edit state not available"
-          description="The backend does not expose an internal listing detail endpoint yet. Continue from a listing created or updated in this browser session."
-          action={
-            <Button asChild>
-              <Link to="/listings/new">Create listing</Link>
-            </Button>
-          }
-        />
+        {listingQuery.isLoading ? (
+          <EmptyState title="Loading listing" description="Fetching internal listing detail." />
+        ) : (
+          <EmptyState
+            title="Listing could not be loaded"
+            description={listingLoadError?.message ?? "The internal listing detail endpoint did not return this listing."}
+            action={<Button onClick={() => listingQuery.refetch()}>Retry</Button>}
+          />
+        )}
       </section>
     );
   }
@@ -448,7 +478,13 @@ export function ListingFormPage() {
       <form className="property-form" onSubmit={onSubmit}>
         <FormSection title="Listing source">
           <Input label="Property id" error={errors.propertyId?.message} {...register("propertyId")} />
-          <Input label="Listing package id" error={errors.listingPackageId?.message} {...register("listingPackageId")} />
+          <Select
+            label="Listing package"
+            options={listingPackageOptions}
+            error={errors.listingPackageId?.message}
+            disabled={packagesQuery.isLoading}
+            {...register("listingPackageId")}
+          />
           <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
           <Select label="Visibility" options={visibilityOptions} error={errors.visibility?.message} {...register("visibility")} />
         </FormSection>

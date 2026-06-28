@@ -828,6 +828,21 @@ p {
   white-space: nowrap;
 }
 
+.listing-workflow-metrics {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.listing-workflow-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 750;
+}
+
 .listing-workflow-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

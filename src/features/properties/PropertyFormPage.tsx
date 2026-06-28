@@ -11,6 +11,13 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
 import {
+  getAmenities,
+  getDistricts,
+  getPropertyTypes,
+  getProvinces,
+  getWards
+} from "../master-data/masterDataApi";
+import {
   createProperty,
   getProperty,
   updateProperty,
@@ -87,6 +94,26 @@ const furnitureOptions = [
   { label: "Fully furnished", value: "FULLY_FURNISHED" }
 ];
 
+function toSelectOptions(
+  items: Array<{ id: number; name: string; code?: string }> | undefined,
+  placeholder: string,
+  currentValue?: string
+) {
+  const options = [
+    { label: placeholder, value: "" },
+    ...(items ?? []).map((item) => ({
+      label: item.code ? `${item.name} (${item.code})` : item.name,
+      value: String(item.id)
+    }))
+  ];
+
+  if (currentValue && !options.some((option) => option.value === currentValue)) {
+    options.push({ label: `Current #${currentValue}`, value: currentValue });
+  }
+
+  return options;
+}
+
 function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
 }
@@ -104,7 +131,7 @@ function toDefaultValues(property?: PropertyRecord): PropertyFormValues {
     currency: property?.currency ?? "VND",
     description: property?.description ?? "",
     direction: property?.direction === "UNKNOWN" ? "" : property?.direction ?? "",
-    districtId: "",
+    districtId: property?.address.districtId ? String(property.address.districtId) : "",
     floorArea: property?.floorArea ? String(property.floorArea) : "",
     floors: property?.floors ? String(property.floors) : "",
     furnitureStatus: property?.furnitureStatus === "UNKNOWN" ? "" : property?.furnitureStatus ?? "",
@@ -116,10 +143,10 @@ function toDefaultValues(property?: PropertyRecord): PropertyFormValues {
     ownerId: property?.ownerId ? String(property.ownerId) : "",
     price: property?.price ? String(property.price) : "",
     propertyTypeId: property?.propertyTypeId ? String(property.propertyTypeId) : "",
-    provinceId: "",
+    provinceId: property?.address.provinceId ? String(property.address.provinceId) : "",
     purpose: property?.purpose ?? "SALE",
     street: "",
-    wardId: ""
+    wardId: property?.address.wardId ? String(property.address.wardId) : ""
   };
 }
 
@@ -191,11 +218,67 @@ export function PropertyFormPage() {
     handleSubmit,
     register,
     reset,
-    setError
+    setError,
+    setValue,
+    watch
   } = useForm<PropertyFormValues>({
     defaultValues,
     resolver: zodResolver(propertyFormSchema)
   });
+  const selectedProvinceId = watch("provinceId");
+  const selectedDistrictId = watch("districtId");
+  const propertyTypesQuery = useQuery({
+    queryFn: getPropertyTypes,
+    queryKey: ["master-data", "property-types"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const provincesQuery = useQuery({
+    queryFn: getProvinces,
+    queryKey: ["master-data", "provinces"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const districtsQuery = useQuery({
+    enabled: Boolean(selectedProvinceId),
+    queryFn: () => getDistricts(selectedProvinceId),
+    queryKey: ["master-data", "districts", selectedProvinceId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const wardsQuery = useQuery({
+    enabled: Boolean(selectedDistrictId),
+    queryFn: () => getWards(selectedDistrictId),
+    queryKey: ["master-data", "wards", selectedDistrictId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const amenitiesQuery = useQuery({
+    queryFn: () => getAmenities(),
+    queryKey: ["master-data", "amenities"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const propertyTypeOptions = useMemo(
+    () => toSelectOptions(propertyTypesQuery.data, "Select property type", defaultValues.propertyTypeId),
+    [defaultValues.propertyTypeId, propertyTypesQuery.data]
+  );
+  const provinceOptions = useMemo(
+    () => toSelectOptions(provincesQuery.data, "Select province", defaultValues.provinceId),
+    [defaultValues.provinceId, provincesQuery.data]
+  );
+  const districtOptions = useMemo(
+    () => toSelectOptions(districtsQuery.data, selectedProvinceId ? "Select district" : "Select province first", defaultValues.districtId),
+    [defaultValues.districtId, districtsQuery.data, selectedProvinceId]
+  );
+  const wardOptions = useMemo(
+    () => toSelectOptions(wardsQuery.data, selectedDistrictId ? "Select ward" : "Select district first", defaultValues.wardId),
+    [defaultValues.wardId, selectedDistrictId, wardsQuery.data]
+  );
+  const amenityOptions = useMemo(
+    () => toSelectOptions(amenitiesQuery.data, "No amenity", defaultValues.amenityId),
+    [amenitiesQuery.data, defaultValues.amenityId]
+  );
   const saveMutation = useMutation({
     mutationFn: (values: PropertyFormValues) =>
       isEditMode ? updateProperty(id ?? "", toRequest(values)) : createProperty(toRequest(values))
@@ -266,7 +349,13 @@ export function PropertyFormPage() {
           <Input label="Code" error={errors.code?.message} {...register("code")} />
           <Input label="Name" error={errors.name?.message} {...register("name")} />
           <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
-          <Input label="Property type id" error={errors.propertyTypeId?.message} {...register("propertyTypeId")} />
+          <Select
+            label="Property type"
+            options={propertyTypeOptions}
+            error={errors.propertyTypeId?.message}
+            disabled={propertyTypesQuery.isLoading}
+            {...register("propertyTypeId")}
+          />
           <Input label="Available from" type="date" error={errors.availableFrom?.message} {...register("availableFrom")} />
           <Input label="Description" error={errors.description?.message} {...register("description")} />
         </FormSection>
@@ -279,9 +368,34 @@ export function PropertyFormPage() {
           <Input label="Floor area" error={errors.floorArea?.message} {...register("floorArea")} />
         </FormSection>
         <FormSection title="Address">
-          <Input label="Province id" error={errors.provinceId?.message} {...register("provinceId")} />
-          <Input label="District id" error={errors.districtId?.message} {...register("districtId")} />
-          <Input label="Ward id" error={errors.wardId?.message} {...register("wardId")} />
+          <Select
+            label="Province"
+            options={provinceOptions}
+            error={errors.provinceId?.message}
+            disabled={provincesQuery.isLoading}
+            {...register("provinceId", {
+              onChange: () => {
+                setValue("districtId", "");
+                setValue("wardId", "");
+              }
+            })}
+          />
+          <Select
+            label="District"
+            options={districtOptions}
+            error={errors.districtId?.message}
+            disabled={!selectedProvinceId || districtsQuery.isLoading}
+            {...register("districtId", {
+              onChange: () => setValue("wardId", "")
+            })}
+          />
+          <Select
+            label="Ward"
+            options={wardOptions}
+            error={errors.wardId?.message}
+            disabled={!selectedDistrictId || wardsQuery.isLoading}
+            {...register("wardId")}
+          />
           <Input label="Street" error={errors.street?.message} {...register("street")} />
           <Input label="Address line" error={errors.addressLine?.message} {...register("addressLine")} />
           <Input label="Latitude" error={errors.latitude?.message} {...register("latitude")} />
@@ -298,7 +412,13 @@ export function PropertyFormPage() {
           <Select label="Furniture status" options={furnitureOptions} error={errors.furnitureStatus?.message} {...register("furnitureStatus")} />
         </FormSection>
         <FormSection title="Amenities">
-          <Input label="Amenity id" error={errors.amenityId?.message} {...register("amenityId")} />
+          <Select
+            label="Amenity"
+            options={amenityOptions}
+            error={errors.amenityId?.message}
+            disabled={amenitiesQuery.isLoading}
+            {...register("amenityId")}
+          />
           <Input label="Amenity note" error={errors.amenityNote?.message} {...register("amenityNote")} />
         </FormSection>
         <FormSection title="Assignment">
