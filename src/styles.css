@@ -632,6 +632,25 @@ p {
   grid-template-columns: 1fr;
 }
 
+.listing-contact-form,
+.commission-rule-form {
+  display: grid;
+  gap: 12px;
+}
+
+.listing-contact-form {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.section-header.compact {
+  margin-bottom: 0;
+}
+
+.section-header.compact h3 {
+  margin: 0;
+}
+
 .image-gallery {
   display: grid;
   grid-template-columns: 1fr;

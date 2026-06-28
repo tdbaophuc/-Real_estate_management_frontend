@@ -10,6 +10,7 @@ import { AiPage } from "../../features/ai/AiPage";
 import { AccountPage } from "../../features/account/AccountPage";
 import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
 import { ContractsPage } from "../../features/contracts/ContractsPage";
+import { CommissionsPage } from "../../features/commissions/CommissionsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
 import { RoleGuard } from "../../shared/auth/RoleGuard";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
@@ -33,7 +34,6 @@ import { TransactionsPage } from "../../features/transactions/TransactionsPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
 import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
-import { PlaceholderPage } from "../../shared/components/PlaceholderPage";
 
 export const router: Router = createBrowserRouter([
   {
@@ -236,7 +236,7 @@ export const router: Router = createBrowserRouter([
             path: "/commissions",
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
-                <PlaceholderPage title="Commissions" />
+                <CommissionsPage />
               </RoleGuard>
             )
           },

@@ -59,6 +59,23 @@ export type PublicListingDetail = PublicListing & {
   isFavorite: boolean;
 };
 
+export type ListingInquiryRequest = {
+  email: string;
+  fullName: string;
+  message: string;
+  phone?: string;
+  preferredContactMethod?: string;
+};
+
+export type ListingAppointmentRequest = {
+  email: string;
+  fullName: string;
+  message?: string;
+  phone?: string;
+  preferredEndAt?: string;
+  preferredStartAt: string;
+};
+
 type BackendListing = Record<string, unknown>;
 
 function readString(source: BackendListing, keys: string[], fallback = "") {
@@ -376,4 +393,21 @@ export function addListingFavorite(listingId: number | string) {
 
 export function removeListingFavorite(listingId: number | string) {
   return apiClient.delete<void>(`/listings/${listingId}/favorite`);
+}
+
+export function createListingInquiry(listingId: number | string, request: ListingInquiryRequest) {
+  return apiClient.post<void>(
+    `/search/listings/${encodeURIComponent(String(listingId))}/inquiries`,
+    request
+  );
+}
+
+export function createListingAppointmentRequest(
+  listingId: number | string,
+  request: ListingAppointmentRequest
+) {
+  return apiClient.post<void>(
+    `/search/listings/${encodeURIComponent(String(listingId))}/appointment-requests`,
+    request
+  );
 }

@@ -41,6 +41,7 @@ import {
   getProperty,
   getPropertyImages,
   getPropertyLegalDocuments,
+  reorderPropertyImages,
   setPropertyCoverImage,
   type LegalDocumentUpdateRequest,
   type LegalDocumentVerificationRequest,
@@ -48,6 +49,7 @@ import {
   type PropertyImage,
   type PropertyRecord,
   updatePropertyStatus,
+  updatePropertyImageMetadata,
   updatePropertyLegalDocument,
   uploadPropertyImage,
   uploadPropertyLegalDocument,
@@ -164,14 +166,18 @@ function ImageManagementPanel({
   images,
   isBusy,
   onDelete,
+  onReorder,
   onSetCover,
+  onUpdateMetadata,
   onUpload,
   propertyId
 }: {
   images: PropertyImage[];
   isBusy: boolean;
   onDelete: (imageId: number | string) => void;
+  onReorder: (items: Array<{ displayOrder: number; imageId: number | string }>) => void;
   onSetCover: (imageId: number | string) => void;
+  onUpdateMetadata: (imageId: number | string, request: { altText?: string; displayOrder?: number }) => void;
   onUpload: (request: { altText: string; displayOrder: number; file: File }) => void;
   propertyId: number | string;
 }) {
@@ -180,6 +186,7 @@ function ImageManagementPanel({
   const [displayOrder, setDisplayOrder] = useState("0");
   const [analysisByImage, setAnalysisByImage] = useState<Record<string, ImageAnalysisSuggestion>>({});
   const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({});
+  const [metadataDrafts, setMetadataDrafts] = useState<Record<string, { altText: string; displayOrder: string }>>({});
   const analysisMutation = useMutation({
     mutationFn: (image: PropertyImage) =>
       analyzePropertyImage({ imageId: image.id, imageUrl: image.url, propertyId }),
@@ -212,6 +219,24 @@ function ImageManagementPanel({
     if (navigator.clipboard) {
       void navigator.clipboard.writeText(value);
     }
+  }
+
+  function getMetadataDraft(image: PropertyImage) {
+    return metadataDrafts[String(image.id)] ?? {
+      altText: image.alt ?? "",
+      displayOrder: String(image.displayOrder)
+    };
+  }
+
+  function updateMetadataDraft(imageId: number | string, field: "altText" | "displayOrder", value: string) {
+    setMetadataDrafts((current) => ({
+      ...current,
+      [String(imageId)]: {
+        altText: current[String(imageId)]?.altText ?? images.find((image) => String(image.id) === String(imageId))?.alt ?? "",
+        displayOrder: current[String(imageId)]?.displayOrder ?? String(images.find((image) => String(image.id) === String(imageId))?.displayOrder ?? 0),
+        [field]: value
+      }
+    }));
   }
 
   return (
@@ -257,6 +282,31 @@ function ImageManagementPanel({
                 {image.isCover ? <StatusBadge tone="success">Cover</StatusBadge> : null}
               </div>
               <div className="property-image-actions">
+                <Input
+                  label="Alt text"
+                  value={getMetadataDraft(image).altText}
+                  onChange={(event) => updateMetadataDraft(image.id, "altText", event.target.value)}
+                />
+                <Input
+                  label="Order"
+                  type="number"
+                  value={getMetadataDraft(image).displayOrder}
+                  onChange={(event) => updateMetadataDraft(image.id, "displayOrder", event.target.value)}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const draft = getMetadataDraft(image);
+                    onUpdateMetadata(image.id, {
+                      altText: draft.altText,
+                      displayOrder: Number(draft.displayOrder || 0)
+                    });
+                  }}
+                  disabled={isBusy}
+                >
+                  Save metadata
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -340,6 +390,24 @@ function ImageManagementPanel({
           <EmptyState title="No images" description="Upload property images before publishing workflows." />
         )}
       </div>
+      {images.length > 1 ? (
+        <div className="property-image-actions">
+          <Button
+            variant="secondary"
+            onClick={() =>
+              onReorder(
+                images.map((image) => ({
+                  displayOrder: Number(getMetadataDraft(image).displayOrder || image.displayOrder),
+                  imageId: image.id
+                }))
+              )
+            }
+            disabled={isBusy}
+          >
+            Save image order
+          </Button>
+        </div>
+      ) : null}
       {analysisError ? <p className="form-alert">{analysisError.message}</p> : null}
       <p className="muted">
         AI image analysis is a draft suggestion for copy/edit review only. It does not publish, change legal status, or make financial conclusions.
@@ -726,6 +794,21 @@ export function PropertyDetailPage() {
     mutationFn: (imageId: number | string) => setPropertyCoverImage(id ?? "", imageId),
     onSuccess: invalidatePropertyData
   });
+  const metadataMutation = useMutation({
+    mutationFn: ({
+      imageId,
+      request
+    }: {
+      imageId: number | string;
+      request: { altText?: string; displayOrder?: number };
+    }) => updatePropertyImageMetadata(id ?? "", imageId, request),
+    onSuccess: invalidatePropertyData
+  });
+  const reorderMutation = useMutation({
+    mutationFn: (items: Array<{ displayOrder: number; imageId: number | string }>) =>
+      reorderPropertyImages(id ?? "", { items }),
+    onSuccess: invalidatePropertyData
+  });
   const statusMutation = useMutation({
     mutationFn: (status: string) => updatePropertyStatus(id ?? "", status),
     onSuccess: () => {
@@ -738,10 +821,16 @@ export function PropertyDetailPage() {
     uploadMutation.error ??
     deleteMutation.error ??
     coverMutation.error ??
+    metadataMutation.error ??
+    reorderMutation.error ??
     statusMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const imageActionBusy =
-    uploadMutation.isPending || deleteMutation.isPending || coverMutation.isPending;
+    uploadMutation.isPending ||
+    deleteMutation.isPending ||
+    coverMutation.isPending ||
+    metadataMutation.isPending ||
+    reorderMutation.isPending;
   const selectedStatus = nextStatus || property?.status || "";
 
   if (!id) {
@@ -819,7 +908,9 @@ export function PropertyDetailPage() {
             isBusy={imageActionBusy}
             onUpload={(request) => uploadMutation.mutate(request)}
             onDelete={(imageId) => deleteMutation.mutate(imageId)}
+            onReorder={(items) => reorderMutation.mutate(items)}
             onSetCover={(imageId) => coverMutation.mutate(imageId)}
+            onUpdateMetadata={(imageId, request) => metadataMutation.mutate({ imageId, request })}
             propertyId={property.id}
           />
           <LegalDocumentsPanel

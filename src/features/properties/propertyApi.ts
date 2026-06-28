@@ -103,6 +103,18 @@ export type PropertyImageUploadRequest = {
   file: File;
 };
 
+export type PropertyImageMetadataRequest = {
+  altText?: string;
+  displayOrder?: number;
+};
+
+export type PropertyImageReorderRequest = {
+  items: Array<{
+    displayOrder: number;
+    imageId: number | string;
+  }>;
+};
+
 export type PropertyLegalDocument = {
   documentNumber: string;
   documentType: string;
@@ -420,6 +432,26 @@ export function deletePropertyImage(propertyId: number | string, imageId: number
 export function setPropertyCoverImage(propertyId: number | string, imageId: number | string) {
   return apiClient.patch<void>(
     `/properties/${encodeURIComponent(String(propertyId))}/cover-image/${encodeURIComponent(String(imageId))}`
+  );
+}
+
+export function updatePropertyImageMetadata(
+  propertyId: number | string,
+  imageId: number | string,
+  request: PropertyImageMetadataRequest
+) {
+  return apiClient
+    .patch<BackendRecord>(
+      `/properties/${encodeURIComponent(String(propertyId))}/images/${encodeURIComponent(String(imageId))}`,
+      request
+    )
+    .then((image) => readImages({ images: [image] })[0] ?? image);
+}
+
+export function reorderPropertyImages(propertyId: number | string, request: PropertyImageReorderRequest) {
+  return apiClient.put<void>(
+    `/properties/${encodeURIComponent(String(propertyId))}/images/reorder`,
+    request
   );
 }
 

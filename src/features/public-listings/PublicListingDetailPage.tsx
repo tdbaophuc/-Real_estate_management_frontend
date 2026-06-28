@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -17,10 +17,15 @@ import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { ImageGallery } from "../../shared/ui/ImageGallery";
+import { Input } from "../../shared/ui/Input";
+import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { formatCurrency } from "../../shared/lib/format";
+import { toIsoDateTime } from "../appointments/appointmentTime";
 import {
   addListingFavorite,
+  createListingAppointmentRequest,
+  createListingInquiry,
   getFavoriteListings,
   getPublicListingDetail,
   removeListingFavorite,
@@ -52,6 +57,29 @@ function formatArea(area: number | null) {
 function isListingInFavorites(favoriteListings: { id: number | string }[] | undefined, listingId: number | string) {
   return favoriteListings?.some((listing) => String(listing.id) === String(listingId)) ?? false;
 }
+
+const contactMethodOptions = [
+  { label: "Email", value: "EMAIL" },
+  { label: "Phone", value: "PHONE" },
+  { label: "Any", value: "ANY" }
+];
+
+const emptyInquiryDraft = {
+  email: "",
+  fullName: "",
+  message: "",
+  phone: "",
+  preferredContactMethod: "EMAIL"
+};
+
+const emptyAppointmentDraft = {
+  email: "",
+  fullName: "",
+  message: "",
+  phone: "",
+  preferredEndAt: "",
+  preferredStartAt: ""
+};
 
 function FavoriteButton({
   isFavorite,
@@ -100,6 +128,10 @@ export function PublicListingDetailPage() {
   const { isAuthenticated, user } = useAuth();
   const roles = user?.roles ?? [];
   const canFavorite = isAuthenticated && hasFavoriteAccess(roles);
+  const [inquiryDraft, setInquiryDraft] = useState(emptyInquiryDraft);
+  const [appointmentDraft, setAppointmentDraft] = useState(emptyAppointmentDraft);
+  const [inquirySent, setInquirySent] = useState(false);
+  const [appointmentSent, setAppointmentSent] = useState(false);
   const listingQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () => getPublicListingDetail(slug ?? ""),
@@ -124,6 +156,67 @@ export function PublicListingDetailPage() {
 
     return listing.isFavorite || isListingInFavorites(favoriteListings, listing.id);
   }, [favoriteListings, listing]);
+  const inquiryMutation = useMutation({
+    mutationFn: (request: typeof inquiryDraft) => {
+      if (!listing) {
+        throw new Error("Missing listing");
+      }
+
+      return createListingInquiry(listing.id, {
+        email: request.email,
+        fullName: request.fullName,
+        message: request.message,
+        phone: request.phone || undefined,
+        preferredContactMethod: request.preferredContactMethod
+      });
+    },
+    onSuccess: () => {
+      setInquiryDraft(emptyInquiryDraft);
+      setInquirySent(true);
+    }
+  });
+  const appointmentMutation = useMutation({
+    mutationFn: (request: typeof appointmentDraft) => {
+      if (!listing) {
+        throw new Error("Missing listing");
+      }
+
+      return createListingAppointmentRequest(listing.id, {
+        email: request.email,
+        fullName: request.fullName,
+        message: request.message || undefined,
+        phone: request.phone || undefined,
+        preferredEndAt: toIsoDateTime(request.preferredEndAt) || undefined,
+        preferredStartAt: toIsoDateTime(request.preferredStartAt)
+      });
+    },
+    onSuccess: () => {
+      setAppointmentDraft(emptyAppointmentDraft);
+      setAppointmentSent(true);
+    }
+  });
+  const inquiryError = inquiryMutation.error ? normalizeUnknownError(inquiryMutation.error) : null;
+  const appointmentError = appointmentMutation.error ? normalizeUnknownError(appointmentMutation.error) : null;
+
+  function updateInquiryDraft(field: keyof typeof inquiryDraft, value: string) {
+    setInquiryDraft((current) => ({ ...current, [field]: value }));
+    setInquirySent(false);
+  }
+
+  function updateAppointmentDraft(field: keyof typeof appointmentDraft, value: string) {
+    setAppointmentDraft((current) => ({ ...current, [field]: value }));
+    setAppointmentSent(false);
+  }
+
+  function submitInquiry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    inquiryMutation.mutate(inquiryDraft);
+  }
+
+  function submitAppointment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    appointmentMutation.mutate(appointmentDraft);
+  }
 
   if (!slug) {
     return (
@@ -257,6 +350,104 @@ export function PublicListingDetailPage() {
                   <Link to="/login">Login to save this listing</Link>
                 </Button>
               ) : null}
+              <form className="listing-contact-form" onSubmit={submitInquiry}>
+                <div className="section-header compact">
+                  <div>
+                    <p className="eyebrow">Inquiry</p>
+                    <h3>Send a question</h3>
+                  </div>
+                </div>
+                <Input
+                  label="Full name"
+                  value={inquiryDraft.fullName}
+                  onChange={(event) => updateInquiryDraft("fullName", event.target.value)}
+                  required
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={inquiryDraft.email}
+                  onChange={(event) => updateInquiryDraft("email", event.target.value)}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  value={inquiryDraft.phone}
+                  onChange={(event) => updateInquiryDraft("phone", event.target.value)}
+                />
+                <Select
+                  label="Preferred contact"
+                  options={contactMethodOptions}
+                  value={inquiryDraft.preferredContactMethod}
+                  onChange={(event) => updateInquiryDraft("preferredContactMethod", event.target.value)}
+                />
+                <label className="field">
+                  <span>Message</span>
+                  <textarea
+                    className="input textarea"
+                    value={inquiryDraft.message}
+                    onChange={(event) => updateInquiryDraft("message", event.target.value)}
+                    required
+                  />
+                </label>
+                {inquiryError ? <p className="form-alert">{inquiryError.message}</p> : null}
+                {inquirySent ? <p className="form-success">Inquiry sent.</p> : null}
+                <Button type="submit" disabled={inquiryMutation.isPending}>
+                  Send inquiry
+                </Button>
+              </form>
+              <form className="listing-contact-form" onSubmit={submitAppointment}>
+                <div className="section-header compact">
+                  <div>
+                    <p className="eyebrow">Viewing</p>
+                    <h3>Request appointment</h3>
+                  </div>
+                </div>
+                <Input
+                  label="Full name"
+                  value={appointmentDraft.fullName}
+                  onChange={(event) => updateAppointmentDraft("fullName", event.target.value)}
+                  required
+                />
+                <Input
+                  label="Email"
+                  type="email"
+                  value={appointmentDraft.email}
+                  onChange={(event) => updateAppointmentDraft("email", event.target.value)}
+                  required
+                />
+                <Input
+                  label="Phone"
+                  value={appointmentDraft.phone}
+                  onChange={(event) => updateAppointmentDraft("phone", event.target.value)}
+                />
+                <Input
+                  label="Preferred start"
+                  type="datetime-local"
+                  value={appointmentDraft.preferredStartAt}
+                  onChange={(event) => updateAppointmentDraft("preferredStartAt", event.target.value)}
+                  required
+                />
+                <Input
+                  label="Preferred end"
+                  type="datetime-local"
+                  value={appointmentDraft.preferredEndAt}
+                  onChange={(event) => updateAppointmentDraft("preferredEndAt", event.target.value)}
+                />
+                <label className="field">
+                  <span>Notes</span>
+                  <textarea
+                    className="input textarea"
+                    value={appointmentDraft.message}
+                    onChange={(event) => updateAppointmentDraft("message", event.target.value)}
+                  />
+                </label>
+                {appointmentError ? <p className="form-alert">{appointmentError.message}</p> : null}
+                {appointmentSent ? <p className="form-success">Appointment request sent.</p> : null}
+                <Button type="submit" disabled={appointmentMutation.isPending}>
+                  Request viewing
+                </Button>
+              </form>
             </aside>
           </div>
         </>
