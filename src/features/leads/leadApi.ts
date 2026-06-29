@@ -240,6 +240,6 @@ export function createFollowUpTask(
 
 export function scoreLead(leadId: number | string) {
   return apiClient
-    .post<BackendRecord>(`/ai/leads/${encodeURIComponent(String(leadId))}/score`, { forceRefresh: false })
+    .post<BackendRecord>(`/ai/leads/${encodeURIComponent(String(leadId))}/score`, { language: "vi" })
     .then(normalizeScore);
 }

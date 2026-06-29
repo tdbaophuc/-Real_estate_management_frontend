@@ -278,10 +278,11 @@ export function ListingFormPage() {
       }
 
       return generateListingDescription({
-        extraInstructions: aiExtraInstructions || undefined,
-        includeSeo: aiIncludeSeo,
         language: aiLanguage,
         listingId: workflowListing.id,
+        sellingPoints: aiExtraInstructions
+          ? aiExtraInstructions.split(",").map((item) => item.trim()).filter(Boolean)
+          : undefined,
         tone: aiTone
       });
     },

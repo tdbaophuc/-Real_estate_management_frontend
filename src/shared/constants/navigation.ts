@@ -5,6 +5,7 @@ export type NavigationItem = {
   labelKey: string;
   icon:
   | "dashboard"
+  | "browse"
   | "favorites"
   | "properties"
   | "listings"
@@ -28,6 +29,12 @@ export const navigationItems: NavigationItem[] = [
     labelKey: "navigation.dashboard",
     icon: "dashboard",
     roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
+  },
+  {
+    href: "/",
+    labelKey: "navigation.browseListings",
+    icon: "browse",
+    roles: ["CUSTOMER"]
   },
   {
     href: "/favorites",

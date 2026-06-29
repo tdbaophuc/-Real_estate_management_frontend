@@ -189,7 +189,7 @@ function ImageManagementPanel({
   const [metadataDrafts, setMetadataDrafts] = useState<Record<string, { altText: string; displayOrder: string }>>({});
   const analysisMutation = useMutation({
     mutationFn: (image: PropertyImage) =>
-      analyzePropertyImage({ imageId: image.id, imageUrl: image.url, propertyId }),
+      analyzePropertyImage({ imageId: image.id }),
     onSuccess: (analysis, image) => {
       const key = String(image.id);
       setAnalysisByImage((current) => ({ ...current, [key]: analysis }));

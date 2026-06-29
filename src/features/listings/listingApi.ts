@@ -96,10 +96,10 @@ export type ListingUpdateRequest = Omit<ListingCreateRequest, "propertyId"> & {
 };
 
 export type ListingDescriptionRequest = {
-  extraInstructions?: string;
-  includeSeo: boolean;
   language: string;
-  listingId: number | string;
+  listingId?: number | string | null;
+  propertyId?: number | string | null;
+  sellingPoints?: string[];
   tone: string;
 };
 

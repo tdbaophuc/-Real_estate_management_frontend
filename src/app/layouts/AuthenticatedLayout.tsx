@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Menu,
   ReceiptText,
+  Search,
   ShieldCheck,
   UserRound,
   Users
@@ -26,9 +28,12 @@ import { Button } from "../../shared/ui/Button";
 import { canAccessNavigationItem, navigationItems } from "../../shared/constants/navigation";
 import { getUnreadNotificationCount } from "../../features/notifications/notificationApi";
 import { LanguageSwitcher } from "../../shared/i18n/LanguageSwitcher";
+import { AiAssistantPanel } from "../../features/ai/AiAssistantPanel";
+import { cn } from "../../shared/lib/cn";
 
 const iconMap = {
   dashboard: LayoutDashboard,
+  browse: Search,
   favorites: Heart,
   properties: Home,
   listings: Building2,
@@ -48,6 +53,7 @@ const iconMap = {
 export function AuthenticatedLayout() {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const roles = user?.roles ?? [];
   const visibleItems = navigationItems.filter((item) =>
     canAccessNavigationItem(item, roles)
@@ -61,7 +67,7 @@ export function AuthenticatedLayout() {
   const unreadCount = unreadQuery.data ?? 0;
 
   return (
-    <div className="app-layout">
+    <div className={cn("app-layout", isAiAssistantOpen && "app-layout-ai-open")}>
       <aside className="sidebar">
         <Link className="brand sidebar-brand" to="/dashboard">
           <span className="brand-mark">
@@ -80,6 +86,15 @@ export function AuthenticatedLayout() {
             );
           })}
         </nav>
+        <button
+          className="sidebar-ai-toggle"
+          type="button"
+          aria-pressed={isAiAssistantOpen}
+          onClick={() => setIsAiAssistantOpen((current) => !current)}
+        >
+          <Bot size={18} />
+          <span>{t("navigation.aiAssistant")}</span>
+        </button>
       </aside>
       <div className="app-content">
         <header className="app-topbar">
@@ -126,9 +141,14 @@ export function AuthenticatedLayout() {
             </details>
           </div>
         </header>
-        <main className="app-main">
-          <Outlet />
-        </main>
+        <div className="app-workspace">
+          <main className="app-main">
+            <Outlet />
+          </main>
+          {isAiAssistantOpen ? (
+            <AiAssistantPanel onClose={() => setIsAiAssistantOpen(false)} />
+          ) : null}
+        </div>
       </div>
     </div>
   );

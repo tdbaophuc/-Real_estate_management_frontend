@@ -73,16 +73,18 @@ export type CustomerSearchParams = {
 };
 
 export type CustomerRecommendationRequest = {
-  currency?: string;
-  limit: number;
-  maxPrice?: number;
-  purpose?: CustomerPurpose | "";
+  candidateLimit?: number;
+  language?: string;
+  maxResults: number;
+  naturalLanguageNeed?: string;
 };
 
 export type CustomerRecommendation = {
   id: number | string;
   price: number | null;
+  reason: string;
   score: number | null;
+  suggestedAction: string;
   title: string;
   url: string;
 };
@@ -215,6 +217,8 @@ function normalizeRecommendation(source: BackendRecord, index = 0): CustomerReco
     id,
     price: readNumber(listing, ["askingPrice", "price"]),
     score: readNumber(source, ["score", "matchScore"]),
+    reason: readString(source, ["reason", "matchReason"]),
+    suggestedAction: readString(source, ["suggestedAction", "nextAction"]),
     title: readString(listing, ["title", "name"], "Recommended listing"),
     url: readString(listing, ["slug"]) ? `/listing/${readString(listing, ["slug"])}` : ""
   };
@@ -226,9 +230,9 @@ function normalizeSummary(source: BackendRecord): CustomerSummary {
   const tags = readRecordArray(content, ["tags"]).map((item) => readString(item, ["label", "name", "text"]));
 
   return {
-    nextAction: readString(content, ["nextAction", "recommendedAction"]),
+    nextAction: readString(content, ["nextBestAction", "nextAction", "recommendedAction"]),
     risks: risks.filter(Boolean),
-    summary: readString(content, ["summary", "content", "text"], "AI summary is not available yet."),
+    summary: readString(content, ["needsSummary", "summary", "content", "text"], "AI summary is not available yet."),
     tags: tags.filter(Boolean)
   };
 }

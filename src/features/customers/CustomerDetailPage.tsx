@@ -121,11 +121,21 @@ export function CustomerDetailPage() {
   });
   const recommendationsMutation = useMutation({
     mutationFn: () => {
+      const customer = customerQuery.data;
+      const requirementText = customer?.requirements
+        .map((requirement) => requirement.summary)
+        .filter(Boolean)
+        .join(". ");
+      const naturalLanguageNeed = [
+        requirementText,
+        recommendationPurpose ? `Purpose: ${recommendationPurpose}` : "",
+        recommendationMaxPrice ? `Budget up to ${recommendationMaxPrice} VND` : ""
+      ].filter(Boolean).join(". ");
       const request: CustomerRecommendationRequest = {
-        currency: "VND",
-        limit: Number(recommendationLimit || 5),
-        maxPrice: toNumber(recommendationMaxPrice),
-        purpose: recommendationPurpose
+        candidateLimit: 30,
+        language: "vi",
+        maxResults: Number(recommendationLimit || 5),
+        naturalLanguageNeed
       };
 
       return getCustomerRecommendations(id ?? "", request);
@@ -339,6 +349,8 @@ export function CustomerDetailPage() {
                 <strong>{listing.title}</strong>
                 <small>{listing.score ? `Match ${listing.score}` : "Match score updating"}</small>
                 <small>{listing.price ? formatCurrency(listing.price, "VND") : "Price updating"}</small>
+                {listing.reason ? <small>{listing.reason}</small> : null}
+                {listing.suggestedAction ? <small>{listing.suggestedAction}</small> : null}
                 {listing.url ? <Link to={listing.url}>Open public listing</Link> : null}
               </article>
             )) : <EmptyState title="No recommendations" description="AI returned an empty recommendation set." />}
