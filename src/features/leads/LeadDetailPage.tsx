@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Bot, CalendarClock, CheckCircle2, MessageSquare, Plus, Trash2, UserPlus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { toIsoDateTime, formatAppointmentDateTime } from "../appointments/appointmentTime";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
@@ -24,6 +25,7 @@ import {
   cancelFollowUpTask,
   updateFollowUpTaskStatus
 } from "../follow-up-tasks/followUpTaskApi";
+import { leadStatusKey } from "./leadLabels";
 
 const pipelineStatusOptions: Array<{ label: string; value: LeadPipelineStatus }> = [
   { label: "New", value: "NEW" },
@@ -84,6 +86,7 @@ function toNumber(value: string) {
 }
 
 export function LeadDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [assignedAgentId, setAssignedAgentId] = useState("");
@@ -251,8 +254,8 @@ export function LeadDetailPage() {
       <div className="detail-header">
         <div>
           <div className="detail-badges">
-            <StatusBadge tone={statusTone(lead.pipelineStatus)}>{lead.pipelineStatus}</StatusBadge>
-            <StatusBadge tone={priorityTone(lead.priority)}>{lead.priority}</StatusBadge>
+            <StatusBadge tone={statusTone(lead.pipelineStatus)}>{t(leadStatusKey(lead.pipelineStatus))}</StatusBadge>
+            <StatusBadge tone={priorityTone(lead.priority)}>{t(`common.${lead.priority.toLowerCase()}`)}</StatusBadge>
           </div>
           <h1>{lead.fullName}</h1>
           <p className="muted">{lead.code} / {lead.sourceCode} / {lead.email || lead.phone || "No contact"}</p>
@@ -308,7 +311,15 @@ export function LeadDetailPage() {
             </Button>
           </form>
           <form className="customer-inline-form" onSubmit={submitStatus}>
-            <Select label="Pipeline status" options={pipelineStatusOptions} value={nextStatus} onChange={(event) => setNextStatus(event.target.value as LeadPipelineStatus)} />
+            <Select
+              label={t("leads.pipelineStatus")}
+              options={pipelineStatusOptions.map((option) => ({
+                ...option,
+                label: t(leadStatusKey(option.value))
+              }))}
+              value={nextStatus}
+              onChange={(event) => setNextStatus(event.target.value as LeadPipelineStatus)}
+            />
             <Button type="submit" disabled={nextStatus === lead.pipelineStatus || statusMutation.isPending}>
               Update status
             </Button>
@@ -377,7 +388,15 @@ export function LeadDetailPage() {
         <form className="lead-task-form" onSubmit={submitTask}>
           <Input label="Task title" value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} />
           <Input label="Due at" type="datetime-local" value={taskDueAt} onChange={(event) => setTaskDueAt(event.target.value)} />
-          <Select label="Priority" options={taskPriorityOptions} value={taskPriority} onChange={(event) => setTaskPriority(event.target.value)} />
+          <Select
+            label={t("common.priority")}
+            options={taskPriorityOptions.map((option) => ({
+              ...option,
+              label: t(`common.${option.value.toLowerCase()}`)
+            }))}
+            value={taskPriority}
+            onChange={(event) => setTaskPriority(event.target.value)}
+          />
           <Button type="submit" disabled={!taskTitle.trim() || taskMutation.isPending}>
             Create follow-up task
           </Button>

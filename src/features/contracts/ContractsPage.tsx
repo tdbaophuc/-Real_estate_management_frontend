@@ -11,6 +11,7 @@ import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
 import { formatCurrency } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import { ContractForm, toContractRequest, type ContractFormValues } from "./ContractForm";
 import { createContract, searchContracts } from "./contractApi";
 
@@ -49,6 +50,7 @@ function statusTone(status: string) {
 }
 
 export function ContractsPage() {
+  const tx = useText();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState("");
@@ -92,44 +94,44 @@ export function ContractsPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">Contracts</p>
-          <h2>Contract management</h2>
+          <h2>{tx("Contract management")}</h2>
         </div>
       </div>
       <section className="content-section">
         <div className="section-header">
           <div>
-            <p className="eyebrow">Create</p>
-            <h2>New contract</h2>
+            <p className="eyebrow">{tx("Create")}</p>
+            <h2>{tx("New contract")}</h2>
           </div>
           <FilePlus2 size={20} />
         </div>
         <ContractForm
-          submitLabel="Create contract"
+          submitLabel={tx("Create contract")}
           onSubmit={(values) => createMutation.mutateAsync(values).then(() => undefined)}
         />
       </section>
       <form className="filter-bar contract-filter-bar" onSubmit={submitSearch}>
-        <Input label="Keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Code, title, party" />
-        <Select label="Status" options={statusOptions} value={status} onChange={(event) => setStatus(event.target.value)} />
-        <Select label="Type" options={typeOptions} value={type} onChange={(event) => setType(event.target.value)} />
+        <Input label={tx("Keyword")} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={tx("Code, title, party")} />
+        <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={status} onChange={(event) => setStatus(event.target.value)} />
+        <Select label={tx("Type")} options={typeOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={type} onChange={(event) => setType(event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={contractsQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       {normalizedError ? (
         <div className="content-section">
-          <EmptyState title="Contracts could not be loaded" description={normalizedError.message} action={<Button onClick={() => contractsQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={tx("Contracts could not be loaded")} description={normalizedError.message} action={<Button onClick={() => contractsQuery.refetch()}>{tx("Retry")}</Button>} />
         </div>
       ) : null}
       {contractsQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No contracts found" description="Create a contract or adjust filters." />
+          <EmptyState title={tx("No contracts found")} description={tx("Create a contract or adjust filters.")} />
         </div>
       ) : null}
       {contractsQuery.data && contractsQuery.data.content.length > 0 ? (
@@ -138,9 +140,9 @@ export function ContractsPage() {
             <thead>
               <tr>
                 <th>Contract</th>
-                <th>Status</th>
-                <th>Type</th>
-                <th>Value</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Type")}</th>
+                <th>{tx("Value")}</th>
                 <th>Customer</th>
                 <th />
               </tr>
@@ -152,13 +154,13 @@ export function ContractsPage() {
                     <strong>{contract.title}</strong>
                     <small>{contract.code}</small>
                   </td>
-                  <td><StatusBadge tone={statusTone(contract.status)}>{contract.status}</StatusBadge></td>
-                  <td>{contract.contractType}</td>
-                  <td>{contract.totalValue ? formatCurrency(contract.totalValue, contract.currency) : "Value updating"}</td>
-                  <td>{contract.customerId ?? "Not linked"}</td>
+                  <td><StatusBadge tone={statusTone(contract.status)}>{tx(contract.status)}</StatusBadge></td>
+                  <td>{tx(contract.contractType)}</td>
+                  <td>{contract.totalValue ? formatCurrency(contract.totalValue, contract.currency) : tx("Value updating")}</td>
+                  <td>{contract.customerId ?? tx("Not linked")}</td>
                   <td>
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/contracts/${contract.id}`}>Open</Link>
+                      <Link to={`/contracts/${contract.id}`}>{tx("Open")}</Link>
                     </Button>
                   </td>
                 </tr>

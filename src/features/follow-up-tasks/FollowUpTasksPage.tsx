@@ -11,6 +11,7 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
+import { useText } from "../../shared/i18n/useText";
 import {
   cancelFollowUpTask,
   searchFollowUpTasks,
@@ -127,6 +128,7 @@ function toUpdateDraft(task: FollowUpTaskRecord) {
 }
 
 export function FollowUpTasksPage() {
+  const tx = useText();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const currentPage = Number(searchParams.get("page") ?? 0) || 0;
@@ -199,36 +201,36 @@ export function FollowUpTasksPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">Follow-up</p>
-          <h2>Task management</h2>
+          <h2>{tx("Task management")}</h2>
         </div>
       </div>
       <form className="filter-bar follow-up-filter-bar" onSubmit={submitSearch}>
-        <Select label="Scope" options={scopeOptions} value={filters.scope} onChange={(event) => updateFilter("scope", event.target.value)} />
-        <Input label="Keyword" value={filters.keyword} onChange={(event) => updateFilter("keyword", event.target.value)} placeholder="Title or description" />
-        <Input label="Lead id" value={filters.leadId} onChange={(event) => updateFilter("leadId", event.target.value)} />
-        <Select label="Status" options={statusOptions} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
-        <Select label="Priority" options={priorityOptions} value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value)} />
+        <Select label={tx("Scope")} options={scopeOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={filters.scope} onChange={(event) => updateFilter("scope", event.target.value)} />
+        <Input label={tx("Keyword")} value={filters.keyword} onChange={(event) => updateFilter("keyword", event.target.value)} placeholder={tx("Title or description")} />
+        <Input label={tx("Lead id")} value={filters.leadId} onChange={(event) => updateFilter("leadId", event.target.value)} />
+        <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
+        <Select label={tx("Priority")} options={priorityOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={tasksQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
         </div>
       </form>
       {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
       {tasksQuery.isLoading ? (
         <section className="content-section">
-          <EmptyState title="Loading follow-up tasks" description="Fetching active tasks." />
+          <EmptyState title={tx("Loading follow-up tasks")} description={tx("Fetching active tasks.")} />
         </section>
       ) : null}
       {normalizedError ? (
         <section className="content-section">
-          <EmptyState title="Tasks could not be loaded" description={normalizedError.message} action={<Button onClick={() => tasksQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={tx("Tasks could not be loaded")} description={normalizedError.message} action={<Button onClick={() => tasksQuery.refetch()}>{tx("Retry")}</Button>} />
         </section>
       ) : null}
       {tasksQuery.data?.content.length === 0 ? (
         <section className="content-section">
-          <EmptyState title="No follow-up tasks" description="Adjust filters or create a task from a lead detail page." />
+          <EmptyState title={tx("No follow-up tasks")} description={tx("Adjust filters or create a task from a lead detail page.")} />
         </section>
       ) : null}
       {tasksQuery.data && tasksQuery.data.content.length > 0 ? (
@@ -236,10 +238,10 @@ export function FollowUpTasksPage() {
           <Table>
             <thead>
               <tr>
-                <th>Task</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Due</th>
+                <th>{tx("Task")}</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Priority")}</th>
+                <th>{tx("Due")}</th>
                 <th>Lead</th>
                 <th />
               </tr>
@@ -250,43 +252,43 @@ export function FollowUpTasksPage() {
                   <td>
                     {editingId === task.id && draft ? (
                       <div className="task-edit-grid">
-                        <Input label="Title" value={draft.title} onChange={(event) => setDraft((current) => current ? { ...current, title: event.target.value } : current)} />
-                        <Input label="Description" value={draft.description} onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)} />
-                        <Input label="Due at" type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft((current) => current ? { ...current, dueAt: event.target.value } : current)} />
-                        <Select label="Priority" options={priorityOptions.filter((item) => item.value)} value={draft.priority} onChange={(event) => setDraft((current) => current ? { ...current, priority: event.target.value } : current)} />
-                        <Input label="Assigned agent id" value={draft.assignedAgentId} onChange={(event) => setDraft((current) => current ? { ...current, assignedAgentId: event.target.value } : current)} />
+                        <Input label={tx("Title")} value={draft.title} onChange={(event) => setDraft((current) => current ? { ...current, title: event.target.value } : current)} />
+                        <Input label={tx("Description")} value={draft.description} onChange={(event) => setDraft((current) => current ? { ...current, description: event.target.value } : current)} />
+                        <Input label={tx("Due at")} type="datetime-local" value={draft.dueAt} onChange={(event) => setDraft((current) => current ? { ...current, dueAt: event.target.value } : current)} />
+                        <Select label={tx("Priority")} options={priorityOptions.filter((item) => item.value).map((option) => ({ ...option, label: tx(option.label) }))} value={draft.priority} onChange={(event) => setDraft((current) => current ? { ...current, priority: event.target.value } : current)} />
+                        <Input label={tx("Assigned agent id")} value={draft.assignedAgentId} onChange={(event) => setDraft((current) => current ? { ...current, assignedAgentId: event.target.value } : current)} />
                       </div>
                     ) : (
                       <>
                         <strong>{task.title}</strong>
-                        <small>{task.description || "No description"}</small>
+                        <small>{task.description || tx("No description")}</small>
                       </>
                     )}
                   </td>
-                  <td><StatusBadge tone={statusTone(task.status)}>{task.status}</StatusBadge></td>
-                  <td><StatusBadge tone={priorityTone(task.priority)}>{task.priority}</StatusBadge></td>
-                  <td>{task.dueAt ? formatAppointmentDateTime(task.dueAt) : "Updating"}</td>
-                  <td>{task.leadId ? <Link to={`/leads/${task.leadId}`}>Lead #{task.leadId}</Link> : "Not linked"}</td>
+                  <td><StatusBadge tone={statusTone(task.status)}>{tx(task.status)}</StatusBadge></td>
+                  <td><StatusBadge tone={priorityTone(task.priority)}>{tx(task.priority)}</StatusBadge></td>
+                  <td>{task.dueAt ? formatAppointmentDateTime(task.dueAt) : tx("Updating")}</td>
+                  <td>{task.leadId ? <Link to={`/leads/${task.leadId}`}>Lead #{task.leadId}</Link> : tx("Not linked")}</td>
                   <td>
                     <div className="task-action-row">
                       {editingId === task.id ? (
                         <>
-                          <Button size="sm" disabled={!draft?.title.trim() || updateMutation.isPending} onClick={() => updateMutation.mutate({ taskId: task.id })}>Save</Button>
-                          <Button size="sm" variant="secondary" onClick={() => { setEditingId(null); setDraft(null); }}>Cancel</Button>
+                          <Button size="sm" disabled={!draft?.title.trim() || updateMutation.isPending} onClick={() => updateMutation.mutate({ taskId: task.id })}>{tx("Save")}</Button>
+                          <Button size="sm" variant="secondary" onClick={() => { setEditingId(null); setDraft(null); }}>{tx("Cancel")}</Button>
                         </>
                       ) : (
                         <>
                           <Button size="sm" variant="secondary" onClick={() => startEdit(task)}>
                             <Edit size={16} />
-                            Edit
+                            {tx("Edit")}
                           </Button>
                           <Button size="sm" variant="secondary" disabled={completeMutation.isPending || task.status === "COMPLETED"} onClick={() => completeMutation.mutate(task.id)}>
                             <CheckCircle2 size={16} />
-                            Complete
+                            {tx("Complete")}
                           </Button>
                           <Button size="sm" variant="danger" disabled={cancelMutation.isPending || task.status === "CANCELLED"} onClick={() => cancelMutation.mutate(task.id)}>
                             <Trash2 size={16} />
-                            Cancel
+                            {tx("Cancel")}
                           </Button>
                         </>
                       )}

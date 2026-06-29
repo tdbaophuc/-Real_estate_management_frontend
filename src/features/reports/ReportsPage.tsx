@@ -18,6 +18,7 @@ import { Button } from "../../shared/ui/Button";
 import { DatePicker } from "../../shared/ui/DatePicker";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Table } from "../../shared/ui/Table";
+import { useText } from "../../shared/i18n/useText";
 import { getReport, type DateRangeParams, type ReportData, type ReportKind, type ReportMetric } from "./reportApi";
 
 type ReportConfig = {
@@ -78,14 +79,15 @@ function formatCellDate(value?: string) {
 }
 
 function ReportChart({ data, primaryLabel, type }: { data: ReportData; primaryLabel: string; type: ReportKind }) {
+  const tx = useText();
   const hasChartData = data.series.some((point) => point.primary > 0 || (point.secondary ?? 0) > 0);
 
   if (!hasChartData) {
     return (
       <div className="report-chart-empty">
         <EmptyState
-          title="No chart data"
-          description="This report has no chartable values for the selected date range."
+          title={tx("No chart data")}
+          description={tx("This report has no chartable values for the selected date range.")}
         />
       </div>
     );
@@ -124,6 +126,7 @@ function ReportChart({ data, primaryLabel, type }: { data: ReportData; primaryLa
 }
 
 function ReportPanel({ config, range }: { config: ReportConfig; range: DateRangeParams }) {
+  const tx = useText();
   const reportQuery = useQuery({
     queryFn: () => getReport(config.kind, range),
     queryKey: ["reports", config.kind, range],
@@ -136,11 +139,11 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
     <section className="content-section report-panel">
       <div className="section-header">
         <div>
-          <p className="eyebrow">{config.title}</p>
-          <h2>{config.title} report</h2>
+          <p className="eyebrow">{tx(config.title)}</p>
+          <h2>{tx(config.title)} {tx("report")}</h2>
         </div>
         <Button
-          aria-label={`Refresh ${config.title} report`}
+          aria-label={`${tx("Refresh")} ${tx(config.title)} ${tx("report")}`}
           disabled={reportQuery.isFetching}
           onClick={() => reportQuery.refetch()}
           size="icon"
@@ -151,9 +154,9 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
       </div>
       {error ? (
         <EmptyState
-          title={`${config.title} report could not be loaded`}
+          title={`${tx(config.title)} ${tx("report could not be loaded")}`}
           description={error.message}
-          action={<Button onClick={() => reportQuery.refetch()}>Retry</Button>}
+          action={<Button onClick={() => reportQuery.refetch()}>{tx("Retry")}</Button>}
         />
       ) : null}
       {reportQuery.isLoading ? (
@@ -175,7 +178,7 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
               ))
             ) : (
               <article className="report-summary-card">
-                <span>Summary</span>
+                <span>{tx("Summary")}</span>
                 <strong>0</strong>
               </article>
             )}
@@ -184,11 +187,11 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
           <Table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Amount</th>
-                <th>Metric</th>
-                <th>Date</th>
+                <th>{tx("Name")}</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Amount")}</th>
+                <th>{tx("Metric")}</th>
+                <th>{tx("Date")}</th>
               </tr>
             </thead>
             <tbody>
@@ -199,16 +202,16 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
                       <strong>{row.name}</strong>
                       <small>{row.id}</small>
                     </td>
-                    <td>{row.status || "Updating"}</td>
+                    <td>{row.status || tx("Updating")}</td>
                     <td>{formatCellAmount(row.amount, row.currency)}</td>
-                    <td>{row.metric || "Updating"}</td>
+                    <td>{row.metric || tx("Updating")}</td>
                     <td>{formatCellDate(row.date)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td className="table-empty" colSpan={5}>
-                    No table rows for this date range.
+                    {tx("No table rows for this date range.")}
                   </td>
                 </tr>
               )}
@@ -221,6 +224,7 @@ function ReportPanel({ config, range }: { config: ReportConfig; range: DateRange
 }
 
 export function ReportsPage() {
+  const tx = useText();
   const queryClient = useQueryClient();
   const defaultRange = useMemo(getDefaultRange, []);
   const [draftRange, setDraftRange] = useState(defaultRange);
@@ -248,8 +252,8 @@ export function ReportsPage() {
     <section className="reports-page">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Reports</p>
-          <h2>Performance reports</h2>
+          <p className="eyebrow">{tx("Reports")}</p>
+          <h2>{tx("Performance reports")}</h2>
           <p className="muted">
             <CalendarDays size={16} />
             {range.startDate} to {range.endDate}
@@ -258,13 +262,13 @@ export function ReportsPage() {
       </div>
       <form className="filter-bar report-filter-bar" onSubmit={submitRange}>
         <DatePicker
-          label="Start date"
+          label={tx("Start date")}
           max={draftRange.endDate}
           value={draftRange.startDate}
           onChange={(event) => setDraftRange((current) => ({ ...current, startDate: event.target.value }))}
         />
         <DatePicker
-          label="End date"
+          label={tx("End date")}
           min={draftRange.startDate}
           value={draftRange.endDate}
           onChange={(event) => setDraftRange((current) => ({ ...current, endDate: event.target.value }))}
@@ -272,10 +276,10 @@ export function ReportsPage() {
         <div className="filter-actions">
           <Button type="submit">
             <Search size={16} />
-            Apply range
+            {tx("Apply range")}
           </Button>
           <Button type="button" onClick={resetRange} variant="secondary">
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
@@ -286,7 +290,7 @@ export function ReportsPage() {
       </div>
       <div className="reports-footnote">
         <BarChart3 size={16} />
-        <span>Charts and tables refresh when the committed date range changes.</span>
+        <span>{tx("Charts and tables refresh when the committed date range changes.")}</span>
       </div>
     </section>
   );

@@ -18,6 +18,7 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { formatCurrency } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import {
   searchPublicListings,
   type ListingPurpose,
@@ -157,6 +158,8 @@ function ListingImage({ listing }: { listing: PublicListing }) {
 }
 
 function ListingCard({ listing }: { listing: PublicListing }) {
+  const tx = useText();
+
   return (
     <article className="listing-card">
       <Link to={`/listing/${listing.slug}`} className="listing-card-link">
@@ -165,8 +168,8 @@ function ListingCard({ listing }: { listing: PublicListing }) {
         </div>
         <div className="listing-body">
           <div className="listing-card-topline">
-            <StatusBadge tone={statusTone(listing.status)}>{listing.status}</StatusBadge>
-            {listing.purpose ? <span>{listing.purpose === "SALE" ? "Sale" : "Rent"}</span> : null}
+            <StatusBadge tone={statusTone(listing.status)}>{tx(listing.status)}</StatusBadge>
+            {listing.purpose ? <span>{listing.purpose === "SALE" ? tx("Sale") : tx("Rent")}</span> : null}
           </div>
           <h3>{listing.title}</h3>
           <p className="muted">
@@ -176,7 +179,7 @@ function ListingCard({ listing }: { listing: PublicListing }) {
           <strong>
             {listing.price
               ? formatCurrency(listing.price, listing.currency)
-              : "Price updating"}
+              : tx("Price updating")}
           </strong>
           <div className="listing-meta">
             <span>
@@ -199,6 +202,7 @@ function ListingCard({ listing }: { listing: PublicListing }) {
 }
 
 export function PublicListingSearchPage() {
+  const tx = useText();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPage = Number(searchParams.get("page") ?? 0) || 0;
   const committedFormState = useMemo(
@@ -249,30 +253,29 @@ export function PublicListingSearchPage() {
   return (
     <section className="public-search">
       <div className="search-hero">
-        <p className="eyebrow">Published listings</p>
-        <h1>Find market-ready homes with the details that matter first.</h1>
+        <p className="eyebrow">{tx("Published listings")}</p>
+        <h1>{tx("Find market-ready homes with the details that matter first.")}</h1>
         <p>
-          Search published inventory by need, budget, size, and room count before
-          opening the full listing.
+          {tx("Search published inventory by need, budget, size, and room count before opening the full listing.")}
         </p>
       </div>
       <form className="filter-bar listing-filter-bar" onSubmit={submitSearch}>
         <Input
-          label="Keyword"
+          label={tx("Keyword")}
           name="keyword"
-          placeholder="Search by title, code, or location"
+          placeholder={tx("Search by title, code, or location")}
           value={formState.keyword}
           onChange={(event) => updateFormField("keyword", event.target.value)}
         />
         <Select
-          label="Purpose"
+          label={tx("Purpose")}
           name="purpose"
-          options={purposeOptions}
+          options={purposeOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={formState.purpose}
           onChange={(event) => updateFormField("purpose", event.target.value)}
         />
         <Input
-          label="Min price"
+          label={tx("Min price")}
           name="priceMin"
           type="number"
           min="0"
@@ -281,7 +284,7 @@ export function PublicListingSearchPage() {
           onChange={(event) => updateFormField("priceMin", event.target.value)}
         />
         <Input
-          label="Max price"
+          label={tx("Max price")}
           name="priceMax"
           type="number"
           min="0"
@@ -290,7 +293,7 @@ export function PublicListingSearchPage() {
           onChange={(event) => updateFormField("priceMax", event.target.value)}
         />
         <Input
-          label="Min area"
+          label={tx("Min area")}
           name="areaMin"
           type="number"
           min="0"
@@ -299,7 +302,7 @@ export function PublicListingSearchPage() {
           onChange={(event) => updateFormField("areaMin", event.target.value)}
         />
         <Input
-          label="Max area"
+          label={tx("Max area")}
           name="areaMax"
           type="number"
           min="0"
@@ -308,48 +311,48 @@ export function PublicListingSearchPage() {
           onChange={(event) => updateFormField("areaMax", event.target.value)}
         />
         <Select
-          label="Bedrooms"
+          label={tx("Bedrooms")}
           name="bedrooms"
-          options={roomOptions}
+          options={roomOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={formState.bedrooms}
           onChange={(event) => updateFormField("bedrooms", event.target.value)}
         />
         <Select
-          label="Bathrooms"
+          label={tx("Bathrooms")}
           name="bathrooms"
-          options={roomOptions}
+          options={roomOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={formState.bathrooms}
           onChange={(event) => updateFormField("bathrooms", event.target.value)}
         />
         <Select
-          label="Sort"
+          label={tx("Sort")}
           name="sort"
-          options={sortOptions}
+          options={sortOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={formState.sort}
           onChange={(event) => updateFormField("sort", event.target.value)}
         />
         <div className="filter-actions">
           <Button type="submit" disabled={listingsQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       <div className="section-header listing-results-header">
         <div>
-          <p className="eyebrow">Search results</p>
+          <p className="eyebrow">{tx("Search results")}</p>
           <h2>
             {listingsQuery.data
-              ? `${listingsQuery.data.totalElements.toLocaleString("vi-VN")} published listings`
-              : "Published listings"}
+              ? `${listingsQuery.data.totalElements.toLocaleString("vi-VN")} ${tx("Published listings").toLowerCase()}`
+              : tx("Published listings")}
           </h2>
         </div>
         <div className="sort-indicator">
           <ArrowUpDown size={16} />
-          {sortOptions.find((option) => option.value === committedFormState.sort)?.label}
+          {tx(sortOptions.find((option) => option.value === committedFormState.sort)?.label ?? "")}
         </div>
       </div>
       {listingsQuery.isLoading ? (
@@ -362,11 +365,11 @@ export function PublicListingSearchPage() {
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Listings could not be loaded"
+            title={tx("Listings could not be loaded")}
             description={normalizedError.message}
             action={
               <Button onClick={() => listingsQuery.refetch()}>
-                Retry
+                {tx("Retry")}
               </Button>
             }
           />
@@ -375,9 +378,9 @@ export function PublicListingSearchPage() {
       {listingsQuery.data && listingsQuery.data.content.length === 0 ? (
         <div className="content-section">
           <EmptyState
-            title="No published listings found"
-            description="Adjust the filters and search again."
-            action={<Button onClick={resetSearch}>Clear filters</Button>}
+            title={tx("No published listings found")}
+            description={tx("Adjust filters and search again.")}
+            action={<Button onClick={resetSearch}>{tx("Clear filters")}</Button>}
           />
         </div>
       ) : null}

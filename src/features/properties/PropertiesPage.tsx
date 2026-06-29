@@ -12,6 +12,7 @@ import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table, TableEmpty } from "../../shared/ui/Table";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import {
   searchProperties,
   type PropertyPurpose,
@@ -132,33 +133,36 @@ function ErrorState({
   onRetry: () => void;
   status: number;
 }) {
+  const tx = useText();
   const title =
     status === 403
-      ? "You do not have access to properties"
+      ? tx("You do not have access to properties")
       : status === 404
-        ? "Properties were not found"
-        : "Properties could not be loaded";
+        ? tx("Properties were not found")
+        : tx("Properties could not be loaded");
 
   return (
     <div className="content-section">
-      <EmptyState title={title} description={message} action={<Button onClick={onRetry}>Retry</Button>} />
+      <EmptyState title={title} description={message} action={<Button onClick={onRetry}>{tx("Retry")}</Button>} />
     </div>
   );
 }
 
 function PropertyMobileCard({ property }: { property: PropertyRecord }) {
+  const tx = useText();
+
   return (
     <article className="property-card">
       <div className="property-card-header">
         <StatusBadge tone={statusTone(property.status)}>{labelStatus(property.status)}</StatusBadge>
-        {property.purpose ? <span>{property.purpose === "SALE" ? "Sale" : "Rent"}</span> : null}
+        {property.purpose ? <span>{property.purpose === "SALE" ? tx("Sale") : tx("Rent")}</span> : null}
       </div>
       <h3>{property.name}</h3>
       <p className="muted">
         <MapPin size={15} />
         {property.address.fullAddress}
       </p>
-      <strong>{property.price ? formatCurrency(property.price, property.currency) : "Price updating"}</strong>
+      <strong>{property.price ? formatCurrency(property.price, property.currency) : tx("Price updating")}</strong>
       <div className="listing-meta">
         <span>
           <Ruler size={15} />
@@ -174,13 +178,14 @@ function PropertyMobileCard({ property }: { property: PropertyRecord }) {
         </span>
       </div>
       <Button asChild variant="secondary" size="sm">
-        <Link to={`/properties/${property.id}`}>View detail</Link>
+        <Link to={`/properties/${property.id}`}>{tx("View detail")}</Link>
       </Button>
     </article>
   );
 }
 
 export function PropertiesPage() {
+  const tx = useText();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPage = Number(searchParams.get("page") ?? 0) || 0;
   const committedFilters = useMemo(() => getInitialFilterState(searchParams), [searchParams]);
@@ -228,67 +233,67 @@ export function PropertiesPage() {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Properties</p>
-          <h2>Property inventory</h2>
+          <p className="eyebrow">{tx("Properties")}</p>
+          <h2>{tx("Property inventory")}</h2>
         </div>
         <Button asChild>
           <Link to="/properties/new">
             <Plus size={16} />
-            New property
+            {tx("New property")}
           </Link>
         </Button>
       </div>
       <form className="filter-bar property-filter-bar" onSubmit={submitSearch}>
         <Input
-          label="Keyword"
+          label={tx("Keyword")}
           name="keyword"
-          placeholder="Search code, name, address"
+          placeholder={tx("Search code, name, address")}
           value={filters.keyword}
           onChange={(event) => updateFilter("keyword", event.target.value)}
         />
         <Select
-          label="Status"
+          label={tx("Status")}
           name="status"
-          options={statusOptions}
+          options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={filters.status}
           onChange={(event) => updateFilter("status", event.target.value)}
         />
         <Select
-          label="Purpose"
+          label={tx("Purpose")}
           name="purpose"
-          options={purposeOptions}
+          options={purposeOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={filters.purpose}
           onChange={(event) => updateFilter("purpose", event.target.value)}
         />
         <Select
-          label="Sort"
+          label={tx("Sort")}
           name="sort"
-          options={sortOptions}
+          options={sortOptions.map((option) => ({ ...option, label: tx(option.label) }))}
           value={filters.sort}
           onChange={(event) => updateFilter("sort", event.target.value)}
         />
         <div className="filter-actions">
           <Button type="submit" disabled={propertiesQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       <div className="section-header property-results-header">
         <div>
-          <p className="eyebrow">Results</p>
+          <p className="eyebrow">{tx("Results")}</p>
           <h2>
             {propertiesQuery.data
-              ? `${propertiesQuery.data.totalElements.toLocaleString("vi-VN")} properties`
-              : "Properties"}
+              ? `${propertiesQuery.data.totalElements.toLocaleString("vi-VN")} ${tx("Properties").toLowerCase()}`
+              : tx("Properties")}
           </h2>
         </div>
         <div className="sort-indicator">
           <ArrowUpDown size={16} />
-          {sortOptions.find((option) => option.value === committedFilters.sort)?.label}
+          {tx(sortOptions.find((option) => option.value === committedFilters.sort)?.label ?? "")}
         </div>
       </div>
       {propertiesQuery.isLoading ? (
@@ -308,9 +313,9 @@ export function PropertiesPage() {
       {propertiesQuery.data && propertiesQuery.data.content.length === 0 ? (
         <div className="content-section">
           <EmptyState
-            title="No properties found"
-            description="Adjust filters or clear them to view more inventory."
-            action={<Button onClick={resetSearch}>Clear filters</Button>}
+            title={tx("No properties found")}
+            description={tx("Adjust filters or clear them to view more inventory.")}
+            action={<Button onClick={resetSearch}>{tx("Clear filters")}</Button>}
           />
         </div>
       ) : null}
@@ -320,13 +325,13 @@ export function PropertiesPage() {
             <Table>
               <thead>
                 <tr>
-                  <th>Property</th>
-                  <th>Status</th>
-                  <th>Purpose</th>
-                  <th>Price</th>
-                  <th>Area</th>
-                  <th>Rooms</th>
-                  <th>Agent</th>
+                  <th>{tx("Property")}</th>
+                  <th>{tx("Status")}</th>
+                  <th>{tx("Purpose")}</th>
+                  <th>{tx("Price")}</th>
+                  <th>{tx("Area")}</th>
+                  <th>{tx("Rooms")}</th>
+                  <th>{tx("Agent")}</th>
                   <th />
                 </tr>
               </thead>
@@ -347,23 +352,23 @@ export function PropertiesPage() {
                           {labelStatus(property.status)}
                         </StatusBadge>
                       </td>
-                      <td>{property.purpose ?? "Updating"}</td>
-                      <td>{property.price ? formatCurrency(property.price, property.currency) : "Updating"}</td>
+                      <td>{property.purpose ? tx(property.purpose === "SALE" ? "Sale" : "Rent") : tx("Updating")}</td>
+                      <td>{property.price ? formatCurrency(property.price, property.currency) : tx("Updating")}</td>
                       <td>{formatArea(property)}</td>
                       <td>
                         {property.bedrooms ?? "-"} bed / {property.bathrooms ?? "-"} bath
                       </td>
-                      <td>{property.assignedAgent?.fullName ?? "Unassigned"}</td>
+                      <td>{property.assignedAgent?.fullName ?? tx("Unassigned")}</td>
                       <td>
                         <Button asChild variant="secondary" size="sm">
-                          <Link to={`/properties/${property.id}`}>View</Link>
+                          <Link to={`/properties/${property.id}`}>{tx("View")}</Link>
                         </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               ) : (
-                <TableEmpty message="No properties found" />
+                <TableEmpty message={tx("No properties found")} />
               )}
             </Table>
           </div>

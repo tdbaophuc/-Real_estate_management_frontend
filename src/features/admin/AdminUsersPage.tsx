@@ -14,6 +14,7 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
+import { useText } from "../../shared/i18n/useText";
 import {
   adminRoleCodes,
   getAdminUser,
@@ -92,6 +93,7 @@ function sameRoles(left: RoleCode[], right: RoleCode[]) {
 }
 
 export function AdminUsersPage() {
+  const tx = useText();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<UserFilters>({ keyword: "", role: "", status: "" });
@@ -183,34 +185,34 @@ export function AdminUsersPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">Admin</p>
-          <h2>User management</h2>
+          <h2>{tx("User management")}</h2>
         </div>
       </div>
       <form className="filter-bar admin-user-filter-bar" onSubmit={submitSearch}>
         <Input
-          label="Keyword"
-          placeholder="Name, email, phone"
+          label={tx("Keyword")}
+          placeholder={tx("Name, email, phone")}
           value={filters.keyword}
           onChange={(event) => updateFilter("keyword", event.target.value)}
         />
-        <Select label="Status" options={statusOptions} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
-        <Select label="Role" options={roleOptions} value={filters.role} onChange={(event) => updateFilter("role", event.target.value)} />
+        <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
+        <Select label={tx("Role")} options={roleOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={filters.role} onChange={(event) => updateFilter("role", event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={usersQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Users could not be loaded"
+            title={tx("Users could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => usersQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => usersQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
@@ -222,7 +224,7 @@ export function AdminUsersPage() {
       ) : null}
       {usersQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No users found" description="Adjust filters to find matching accounts." action={<Button onClick={resetSearch}>Clear filters</Button>} />
+          <EmptyState title={tx("No users found")} description={tx("Adjust filters to find matching accounts.")} action={<Button onClick={resetSearch}>{tx("Clear filters")}</Button>} />
         </div>
       ) : null}
       {usersQuery.data && usersQuery.data.content.length > 0 ? (
@@ -230,10 +232,10 @@ export function AdminUsersPage() {
           <Table>
             <thead>
               <tr>
-                <th>User</th>
-                <th>Status</th>
-                <th>Roles</th>
-                <th>Created</th>
+                <th>{tx("User")}</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Roles")}</th>
+                <th>{tx("Created")}</th>
                 <th />
               </tr>
             </thead>
@@ -247,14 +249,14 @@ export function AdminUsersPage() {
                   <td><StatusBadge tone={statusTone(user.status)}>{user.status.replace(/_/g, " ")}</StatusBadge></td>
                   <td>
                     <div className="admin-role-list">
-                      {user.roles.length ? user.roles.map((role) => <span key={role}>{roleLabels[role]}</span>) : <span>No roles</span>}
+                      {user.roles.length ? user.roles.map((role) => <span key={role}>{roleLabels[role]}</span>) : <span>{tx("No roles")}</span>}
                     </div>
                   </td>
                   <td>{formatMaybeDate(user.createdAt)}</td>
                   <td>
                     <Button size="sm" variant="secondary" onClick={() => setSelectedUserId(user.id)}>
                       <Eye size={16} />
-                      Detail
+                      {tx("Detail")}
                     </Button>
                   </td>
                 </tr>

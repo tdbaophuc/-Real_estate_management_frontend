@@ -19,11 +19,13 @@ import {
   UserRound,
   Users
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { canAccessNavigationItem, navigationItems } from "../../shared/constants/navigation";
 import { getUnreadNotificationCount } from "../../features/notifications/notificationApi";
+import { LanguageSwitcher } from "../../shared/i18n/LanguageSwitcher";
 
 const iconMap = {
   dashboard: LayoutDashboard,
@@ -45,6 +47,7 @@ const iconMap = {
 
 export function AuthenticatedLayout() {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const roles = user?.roles ?? [];
   const visibleItems = navigationItems.filter((item) =>
     canAccessNavigationItem(item, roles)
@@ -66,13 +69,13 @@ export function AuthenticatedLayout() {
           </span>
           <span>RealEstate Pro</span>
         </Link>
-        <nav className="sidebar-nav" aria-label="Application navigation">
+        <nav className="sidebar-nav" aria-label={t("app.title")}>
           {visibleItems.map((item) => {
             const Icon = iconMap[item.icon];
             return (
               <NavLink key={item.href} to={item.href}>
                 <Icon size={17} />
-                {item.label}
+                {t(item.labelKey)}
               </NavLink>
             );
           })}
@@ -81,11 +84,12 @@ export function AuthenticatedLayout() {
       <div className="app-content">
         <header className="app-topbar">
           <div>
-            <p className="eyebrow">Workspace</p>
-            <h1>Real Estate Management</h1>
+            <p className="eyebrow">{t("app.workspace")}</p>
+            <h1>{t("app.title")}</h1>
           </div>
           <div className="topbar-actions">
-            <Button asChild variant="ghost" size="icon" aria-label="Notifications">
+            <LanguageSwitcher />
+            <Button asChild variant="ghost" size="icon" aria-label={t("app.notifications")}>
               <Link className="notification-button" to="/notifications">
                 <Bell size={18} />
                 {unreadCount > 0 ? (
@@ -96,27 +100,27 @@ export function AuthenticatedLayout() {
               </Link>
             </Button>
             <details className="user-menu">
-              <summary aria-label="User menu">
+              <summary aria-label={t("app.userMenu")}>
                 <span className="user-chip">
                   <span>{user?.fullName ?? "Demo User"}</span>
-                  <small>{roles.join(", ") || "No role"}</small>
+                  <small>{roles.join(", ") || t("app.noRole")}</small>
                 </span>
                 <Menu size={17} />
               </summary>
               <div className="user-menu-panel">
                 <div>
                   <strong>{user?.fullName ?? "Demo User"}</strong>
-                  <small>{user?.email ?? "No email"}</small>
+                  <small>{user?.email ?? t("app.noEmail")}</small>
                 </div>
                 <Button asChild variant="secondary" size="sm">
                   <Link to="/account">
                     <UserRound size={16} />
-                    Account
+                    {t("app.account")}
                   </Link>
                 </Button>
                 <Button variant="secondary" size="sm" onClick={logout}>
                   <LogOut size={16} />
-                  Logout
+                  {t("app.logout")}
                 </Button>
               </div>
             </details>

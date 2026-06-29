@@ -11,6 +11,7 @@ import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
 import { formatCurrency } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import { createTransaction, searchTransactions } from "./transactionApi";
 
 const pageSize = 10;
@@ -47,6 +48,7 @@ function toNumber(value: string) {
 }
 
 export function TransactionsPage() {
+  const tx = useText();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState("");
@@ -119,52 +121,52 @@ export function TransactionsPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">Transactions</p>
-          <h2>Transaction records</h2>
+          <h2>{tx("Transaction records")}</h2>
         </div>
       </div>
       <section className="content-section">
         <div className="section-header">
           <div>
-            <p className="eyebrow">Create</p>
-            <h2>New transaction</h2>
+            <p className="eyebrow">{tx("Create")}</p>
+            <h2>{tx("New transaction")}</h2>
           </div>
         </div>
         <form className="transaction-create-form" onSubmit={submitCreate}>
-          <Input label="Code" value={code} onChange={(event) => setCode(event.target.value)} />
-          <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
-          <Input label="Contract id" value={contractId} onChange={(event) => setContractId(event.target.value)} />
-          <Input label="Customer id" value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
-          <Input label="Property id" value={propertyId} onChange={(event) => setPropertyId(event.target.value)} />
-          <Input label="Total amount" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} />
-          <Input label="Currency" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} />
+          <Input label={tx("Code")} value={code} onChange={(event) => setCode(event.target.value)} />
+          <Input label={tx("Title")} value={title} onChange={(event) => setTitle(event.target.value)} />
+          <Input label={tx("Contract id")} value={contractId} onChange={(event) => setContractId(event.target.value)} />
+          <Input label={tx("Customer id")} value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
+          <Input label={tx("Property id")} value={propertyId} onChange={(event) => setPropertyId(event.target.value)} />
+          <Input label={tx("Total amount")} value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} />
+          <Input label={tx("Currency")} value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} />
           <Button type="submit" disabled={!code.trim() || !title.trim() || createMutation.isPending}>
             <Plus size={16} />
-            Create transaction
+            {tx("Create transaction")}
           </Button>
         </form>
         {createMutation.error ? <p className="form-alert">{normalizeUnknownError(createMutation.error).message}</p> : null}
       </section>
       <form className="filter-bar transaction-filter-bar" onSubmit={submitSearch}>
-        <Input label="Keyword" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="Code, title, contract" />
-        <Select label="Status" options={statusOptions} value={status} onChange={(event) => setStatus(event.target.value)} />
+        <Input label={tx("Keyword")} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={tx("Code, title, contract")} />
+        <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={status} onChange={(event) => setStatus(event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={transactionsQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       {normalizedError ? (
         <div className="content-section">
-          <EmptyState title="Transactions could not be loaded" description={normalizedError.message} action={<Button onClick={() => transactionsQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={tx("Transactions could not be loaded")} description={normalizedError.message} action={<Button onClick={() => transactionsQuery.refetch()}>{tx("Retry")}</Button>} />
         </div>
       ) : null}
       {transactionsQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No transactions found" description="Create a transaction or adjust filters." />
+          <EmptyState title={tx("No transactions found")} description={tx("Create a transaction or adjust filters.")} />
         </div>
       ) : null}
       {transactionsQuery.data && transactionsQuery.data.content.length > 0 ? (
@@ -173,8 +175,8 @@ export function TransactionsPage() {
             <thead>
               <tr>
                 <th>Transaction</th>
-                <th>Status</th>
-                <th>Amount</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Amount")}</th>
                 <th>Contract</th>
                 <th>Customer</th>
                 <th />
@@ -187,13 +189,13 @@ export function TransactionsPage() {
                     <strong>{transaction.title}</strong>
                     <small>{transaction.code}</small>
                   </td>
-                  <td><StatusBadge tone={statusTone(transaction.status)}>{transaction.status}</StatusBadge></td>
-                  <td>{transaction.totalAmount ? formatCurrency(transaction.totalAmount, transaction.currency) : "Amount updating"}</td>
-                  <td>{transaction.contractId ?? "Not linked"}</td>
-                  <td>{transaction.customerId ?? "Not linked"}</td>
+                  <td><StatusBadge tone={statusTone(transaction.status)}>{tx(transaction.status)}</StatusBadge></td>
+                  <td>{transaction.totalAmount ? formatCurrency(transaction.totalAmount, transaction.currency) : tx("Amount updating")}</td>
+                  <td>{transaction.contractId ?? tx("Not linked")}</td>
+                  <td>{transaction.customerId ?? tx("Not linked")}</td>
                   <td>
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/transactions/${transaction.id}`}>Open</Link>
+                      <Link to={`/transactions/${transaction.id}`}>{tx("Open")}</Link>
                     </Button>
                   </td>
                 </tr>

@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "./Button";
+import { useText } from "../i18n/useText";
 
 type DialogProps = {
   children: ReactNode;
@@ -10,16 +11,18 @@ type DialogProps = {
 };
 
 export function Dialog({ children, onClose, open, title }: DialogProps) {
+  const tx = useText();
+
   if (!open) {
     return null;
   }
 
   return (
     <div className="overlay" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <section className="dialog" role="dialog" aria-modal="true" aria-label={tx(title)}>
         <header className="dialog-header">
-          <h2>{title}</h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
+          <h2>{tx(title)}</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={tx("Close dialog")}>
             <X size={18} />
           </Button>
         </header>
@@ -28,4 +31,3 @@ export function Dialog({ children, onClose, open, title }: DialogProps) {
     </div>
   );
 }
-

@@ -12,6 +12,7 @@ import {
   Phone,
   Ruler
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
@@ -57,12 +58,6 @@ function formatArea(area: number | null) {
 function isListingInFavorites(favoriteListings: { id: number | string }[] | undefined, listingId: number | string) {
   return favoriteListings?.some((listing) => String(listing.id) === String(listingId)) ?? false;
 }
-
-const contactMethodOptions = [
-  { label: "Email", value: "EMAIL" },
-  { label: "Phone", value: "PHONE" },
-  { label: "Any", value: "ANY" }
-];
 
 const emptyInquiryDraft = {
   email: "",
@@ -124,6 +119,7 @@ function FavoriteButton({
 }
 
 export function PublicListingDetailPage() {
+  const { t } = useTranslation();
   const { slug } = useParams();
   const { isAuthenticated, user } = useAuth();
   const roles = user?.roles ?? [];
@@ -197,6 +193,14 @@ export function PublicListingDetailPage() {
   });
   const inquiryError = inquiryMutation.error ? normalizeUnknownError(inquiryMutation.error) : null;
   const appointmentError = appointmentMutation.error ? normalizeUnknownError(appointmentMutation.error) : null;
+  const contactMethodOptions = useMemo(
+    () => [
+      { label: t("common.email"), value: "EMAIL" },
+      { label: t("common.phone"), value: "PHONE" },
+      { label: t("common.any"), value: "ANY" }
+    ],
+    [t]
+  );
 
   function updateInquiryDraft(field: keyof typeof inquiryDraft, value: string) {
     setInquiryDraft((current) => ({ ...current, [field]: value }));
@@ -358,25 +362,25 @@ export function PublicListingDetailPage() {
                   </div>
                 </div>
                 <Input
-                  label="Full name"
+                  label={t("common.fullName")}
                   value={inquiryDraft.fullName}
                   onChange={(event) => updateInquiryDraft("fullName", event.target.value)}
                   required
                 />
                 <Input
-                  label="Email"
+                  label={t("common.email")}
                   type="email"
                   value={inquiryDraft.email}
                   onChange={(event) => updateInquiryDraft("email", event.target.value)}
                   required
                 />
                 <Input
-                  label="Phone"
+                  label={t("common.phone")}
                   value={inquiryDraft.phone}
                   onChange={(event) => updateInquiryDraft("phone", event.target.value)}
                 />
                 <Select
-                  label="Preferred contact"
+                  label={t("common.preferredContact")}
                   options={contactMethodOptions}
                   value={inquiryDraft.preferredContactMethod}
                   onChange={(event) => updateInquiryDraft("preferredContactMethod", event.target.value)}
@@ -404,20 +408,20 @@ export function PublicListingDetailPage() {
                   </div>
                 </div>
                 <Input
-                  label="Full name"
+                  label={t("common.fullName")}
                   value={appointmentDraft.fullName}
                   onChange={(event) => updateAppointmentDraft("fullName", event.target.value)}
                   required
                 />
                 <Input
-                  label="Email"
+                  label={t("common.email")}
                   type="email"
                   value={appointmentDraft.email}
                   onChange={(event) => updateAppointmentDraft("email", event.target.value)}
                   required
                 />
                 <Input
-                  label="Phone"
+                  label={t("common.phone")}
                   value={appointmentDraft.phone}
                   onChange={(event) => updateAppointmentDraft("phone", event.target.value)}
                 />

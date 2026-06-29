@@ -5,6 +5,7 @@ import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
+import { useText } from "../../shared/i18n/useText";
 import { createChatSession, getChatSession, sendChatMessage, type AiChatMessage } from "./aiApi";
 
 function messageLabel(message: AiChatMessage) {
@@ -26,6 +27,7 @@ function copyText(value: string) {
 }
 
 export function AiPage() {
+  const tx = useText();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("Real estate assistant");
   const [sessionIdInput, setSessionIdInput] = useState("");
@@ -101,38 +103,38 @@ export function AiPage() {
     <section className="ai-page">
       <div className="section-header">
         <div>
-          <p className="eyebrow">AI assistant</p>
-          <h2>Chat suggestions</h2>
+          <p className="eyebrow">{tx("AI assistant")}</p>
+          <h2>{tx("Chat suggestions")}</h2>
           <p className="muted">
             <Bot size={16} />
-            AI output is a draft suggestion. Review, copy, edit, and confirm with qualified staff for legal or financial decisions.
+            {tx("AI output is a draft suggestion. Review, copy, edit, and confirm with qualified staff for legal or financial decisions.")}
           </p>
         </div>
       </div>
       <div className="ai-chat-layout">
         <aside className="content-section ai-session-panel">
           <form className="form-stack" onSubmit={submitCreate}>
-            <Input label="New session title" value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input label={tx("New session title")} value={title} onChange={(event) => setTitle(event.target.value)} />
             <Button type="submit" disabled={createMutation.isPending}>
               <MessageSquarePlus size={16} />
-              Create session
+              {tx("Create session")}
             </Button>
           </form>
           <form className="form-stack" onSubmit={submitLoad}>
-            <Input label="Load session id" value={sessionIdInput} onChange={(event) => setSessionIdInput(event.target.value)} />
+            <Input label={tx("Load session id")} value={sessionIdInput} onChange={(event) => setSessionIdInput(event.target.value)} />
             <Button type="submit" variant="secondary" disabled={!sessionIdInput.trim()}>
               <Search size={16} />
-              Load session
+              {tx("Load session")}
             </Button>
           </form>
           {sessionQuery.data ? (
             <div className="ai-session-meta">
-              <span>Active session</span>
+              <span>{tx("Active session")}</span>
               <strong>{sessionQuery.data.title}</strong>
               <small>{sessionQuery.data.id}</small>
               <Button size="sm" variant="secondary" onClick={() => sessionQuery.refetch()} disabled={sessionQuery.isFetching}>
                 <RefreshCcw size={16} />
-                Refresh
+                {tx("Refresh")}
               </Button>
             </div>
           ) : null}
@@ -141,13 +143,13 @@ export function AiPage() {
         <section className="content-section ai-chat-panel">
           {normalizedError ? (
             <EmptyState
-              title="Chat session could not be loaded"
+              title={tx("Chat session could not be loaded")}
               description={normalizedError.message}
-              action={<Button onClick={() => sessionQuery.refetch()}>Retry</Button>}
+              action={<Button onClick={() => sessionQuery.refetch()}>{tx("Retry")}</Button>}
             />
           ) : null}
           {!activeSessionId ? (
-            <EmptyState title="No chat session selected" description="Create a new chat session or load an existing session id." />
+            <EmptyState title={tx("No chat session selected")} description={tx("Create a new chat session or load an existing session id.")} />
           ) : null}
           {sessionQuery.isLoading ? (
             <div className="detail-skeleton">
@@ -162,22 +164,22 @@ export function AiPage() {
                   messages.map((item) => (
                     <article className={`ai-message ai-message-${item.role}`} key={item.id}>
                       <header>
-                        <strong>{messageLabel(item)}</strong>
+                        <strong>{tx(messageLabel(item))}</strong>
                         {item.role === "assistant" ? (
                           <div className="ai-message-actions">
                             <Button size="sm" variant="secondary" onClick={() => copyText(messageDrafts[String(item.id)] ?? item.content)}>
                               <Copy size={16} />
-                              Copy draft
+                              {tx("Copy draft")}
                             </Button>
                             <Button size="sm" variant="secondary" onClick={() => setMessage(messageDrafts[String(item.id)] ?? item.content)}>
-                              Apply to message
+                              {tx("Apply to message")}
                             </Button>
                           </div>
                         ) : null}
                       </header>
                       {item.role === "assistant" ? (
                         <label className="field">
-                          <span>Editable AI draft</span>
+                          <span>{tx("Editable AI draft")}</span>
                           <textarea
                             className="input textarea"
                             value={messageDrafts[String(item.id)] ?? item.content}
@@ -195,23 +197,23 @@ export function AiPage() {
                     </article>
                   ))
                 ) : (
-                  <EmptyState title="No messages yet" description="Send a question to get editable AI suggestions." />
+                  <EmptyState title={tx("No messages yet")} description={tx("Send a question to get editable AI suggestions.")} />
                 )}
               </div>
               <form className="ai-message-form" onSubmit={submitMessage}>
                 <label className="field" htmlFor="ai-message">
-                  <span>Message</span>
+                  <span>{tx("Message")}</span>
                   <textarea
                     id="ai-message"
                     className="input textarea"
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
-                    placeholder="Ask for listing copy, property comparison, or next-step suggestions."
+                    placeholder={tx("Ask for listing copy, property comparison, or next-step suggestions.")}
                   />
                 </label>
                 <Button type="submit" disabled={!message.trim() || sendMutation.isPending}>
                   <Send size={16} />
-                  Send
+                  {tx("Send")}
                 </Button>
               </form>
             </>

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useText } from "../i18n/useText";
 
 type TableProps = {
   children: ReactNode;
@@ -9,10 +10,12 @@ export function Table({ children }: TableProps) {
 }
 
 export function TableEmpty({ message }: { message: string }) {
+  const tx = useText();
+
   return (
     <tbody>
       <tr>
-        <td className="table-empty" colSpan={99}>{message}</td>
+        <td className="table-empty" colSpan={99}>{tx(message)}</td>
       </tr>
     </tbody>
   );

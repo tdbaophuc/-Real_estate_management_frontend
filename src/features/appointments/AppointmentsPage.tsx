@@ -10,6 +10,7 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
+import { useText } from "../../shared/i18n/useText";
 import {
   createAppointment,
   getMyAppointments,
@@ -52,6 +53,7 @@ function toNumber(value: string) {
 }
 
 function CalendarView({ appointments }: { appointments: AppointmentRecord[] }) {
+  const tx = useText();
   const grouped = appointments.reduce<Record<string, AppointmentRecord[]>>((acc, appointment) => {
     const key = appointment.startTime
       ? new Date(appointment.startTime).toISOString().slice(0, 10)
@@ -67,7 +69,7 @@ function CalendarView({ appointments }: { appointments: AppointmentRecord[] }) {
           <h3>{date}</h3>
           {items.map((appointment) => (
             <Link to={`/appointments/${appointment.id}`} className="appointment-calendar-item" key={appointment.id}>
-              <StatusBadge tone={statusTone(appointment.status)}>{appointment.status}</StatusBadge>
+              <StatusBadge tone={statusTone(appointment.status)}>{tx(appointment.status)}</StatusBadge>
               <strong>{appointment.title}</strong>
               <small>{formatAppointmentDateTime(appointment.startTime)}</small>
             </Link>
@@ -79,6 +81,7 @@ function CalendarView({ appointments }: { appointments: AppointmentRecord[] }) {
 }
 
 export function AppointmentsPage({ my = false }: { my?: boolean }) {
+  const tx = useText();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [status, setStatus] = useState("");
@@ -151,74 +154,74 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Appointments</p>
-          <h2>{my ? "My appointments" : "Appointment calendar"}</h2>
+          <p className="eyebrow">{tx("Appointments")}</p>
+          <h2>{my ? tx("My appointments") : tx("Appointment calendar")}</h2>
         </div>
         <div className="filter-actions">
           <Button asChild variant={my ? "secondary" : "ghost"} size="sm">
-            <Link to="/appointments">Team calendar</Link>
+            <Link to="/appointments">{tx("Team calendar")}</Link>
           </Button>
           <Button asChild variant={my ? "ghost" : "secondary"} size="sm">
-            <Link to="/appointments/my">My appointments</Link>
+            <Link to="/appointments/my">{tx("My appointments")}</Link>
           </Button>
         </div>
       </div>
       <section className="content-section">
         <div className="section-header">
           <div>
-            <p className="eyebrow">Create</p>
-            <h2>New viewing</h2>
+            <p className="eyebrow">{tx("Create")}</p>
+            <h2>{tx("New viewing")}</h2>
           </div>
         </div>
         <form className="appointment-create-form" onSubmit={submitCreate}>
-          <Input label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
-          <Input label="Start" type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-          <Input label="End" type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
-          <Input label="Lead id" value={leadId} onChange={(event) => setLeadId(event.target.value)} />
-          <Input label="Customer id" value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
-          <Input label="Agent id" value={agentId} onChange={(event) => setAgentId(event.target.value)} />
-          <Input label="Property id" value={propertyId} onChange={(event) => setPropertyId(event.target.value)} />
-          <Input label="Listing id" value={listingId} onChange={(event) => setListingId(event.target.value)} />
-          <Input label="Location" value={location} onChange={(event) => setLocation(event.target.value)} />
-          <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <Input label={tx("Title")} value={title} onChange={(event) => setTitle(event.target.value)} />
+          <Input label={tx("Start")} type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+          <Input label={tx("End")} type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+          <Input label={tx("Lead id")} value={leadId} onChange={(event) => setLeadId(event.target.value)} />
+          <Input label={tx("Customer id")} value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
+          <Input label={tx("Agent id")} value={agentId} onChange={(event) => setAgentId(event.target.value)} />
+          <Input label={tx("Property id")} value={propertyId} onChange={(event) => setPropertyId(event.target.value)} />
+          <Input label={tx("Listing id")} value={listingId} onChange={(event) => setListingId(event.target.value)} />
+          <Input label={tx("Location")} value={location} onChange={(event) => setLocation(event.target.value)} />
+          <Input label={tx("Notes")} value={notes} onChange={(event) => setNotes(event.target.value)} />
           <Button type="submit" disabled={!title.trim() || !startTime || !endTime || createMutation.isPending}>
             <Plus size={16} />
-            Create appointment
+            {tx("Create appointment")}
           </Button>
         </form>
         {hasConflict ? (
-          <p className="form-alert">Conflict warning: this time overlaps with an appointment already loaded in the calendar.</p>
+          <p className="form-alert">{tx("Conflict warning: this time overlaps with an appointment already loaded in the calendar.")}</p>
         ) : null}
         {createMutation.error ? <p className="form-alert">{normalizeUnknownError(createMutation.error).message}</p> : null}
       </section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Schedule</p>
-          <h2>{view === "calendar" ? "Calendar view" : "List view"}</h2>
+          <p className="eyebrow">{tx("Schedule")}</p>
+          <h2>{view === "calendar" ? tx("Calendar view") : tx("List view")}</h2>
         </div>
         <div className="filter-actions">
-          <Select label="Status" options={statusOptions} value={status} onChange={(event) => {
+          <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} value={status} onChange={(event) => {
             setStatus(event.target.value);
             setPage(0);
           }} />
           <Button type="button" variant={view === "calendar" ? "primary" : "secondary"} onClick={() => setView("calendar")}>
             <CalendarDays size={16} />
-            Calendar
+            {tx("Calendar")}
           </Button>
           <Button type="button" variant={view === "list" ? "primary" : "secondary"} onClick={() => setView("list")}>
             <List size={16} />
-            List
+            {tx("List")}
           </Button>
         </div>
       </div>
       {normalizedError ? (
         <div className="content-section">
-          <EmptyState title="Appointments could not be loaded" description={normalizedError.message} action={<Button onClick={() => appointmentsQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={tx("Appointments could not be loaded")} description={normalizedError.message} action={<Button onClick={() => appointmentsQuery.refetch()}>{tx("Retry")}</Button>} />
         </div>
       ) : null}
       {appointmentsQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No appointments found" description="Create a viewing or adjust the status filter." />
+          <EmptyState title={tx("No appointments found")} description={tx("Create a viewing or adjust the status filter.")} />
         </div>
       ) : null}
       {appointmentsQuery.data && appointmentsQuery.data.content.length > 0 && view === "calendar" ? (
@@ -229,11 +232,11 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
           <Table>
             <thead>
               <tr>
-                <th>Appointment</th>
-                <th>Status</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Agent</th>
+                <th>{tx("Appointment")}</th>
+                <th>{tx("Status")}</th>
+                <th>{tx("Start")}</th>
+                <th>{tx("End")}</th>
+                <th>{tx("Agent")}</th>
                 <th />
               </tr>
             </thead>
@@ -242,15 +245,15 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
                 <tr key={appointment.id}>
                   <td>
                     <strong>{appointment.title}</strong>
-                    <small>{appointment.location || "Location updating"}</small>
+                    <small>{appointment.location || tx("Location updating")}</small>
                   </td>
-                  <td><StatusBadge tone={statusTone(appointment.status)}>{appointment.status}</StatusBadge></td>
+                  <td><StatusBadge tone={statusTone(appointment.status)}>{tx(appointment.status)}</StatusBadge></td>
                   <td>{formatAppointmentDateTime(appointment.startTime)}</td>
                   <td>{formatAppointmentDateTime(appointment.endTime)}</td>
-                  <td>{appointment.agentId ?? "Unassigned"}</td>
+                  <td>{appointment.agentId ?? tx("Unassigned")}</td>
                   <td>
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/appointments/${appointment.id}`}>Open</Link>
+                      <Link to={`/appointments/${appointment.id}`}>{tx("Open")}</Link>
                     </Button>
                   </td>
                 </tr>

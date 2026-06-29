@@ -14,6 +14,7 @@ import { normalizeUnknownError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
+import { useText } from "../../shared/i18n/useText";
 import { getFavoriteListings } from "../public-listings/publicListingApi";
 import { getRoleDashboard, type DashboardRole } from "./dashboardApi";
 
@@ -36,6 +37,7 @@ function DashboardSkeleton() {
 }
 
 function CustomerDashboard() {
+  const tx = useText();
   const favoritesQuery = useQuery({
     queryFn: () => getFavoriteListings({ page: 0, size: 1 }),
     queryKey: ["favorite-listings", "dashboard"],
@@ -46,14 +48,14 @@ function CustomerDashboard() {
     <section className="dashboard">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h2>Customer dashboard</h2>
+          <p className="eyebrow">{tx("Dashboard")}</p>
+          <h2>{tx("Customer dashboard")}</h2>
         </div>
       </div>
       <div className="metric-grid">
         <article className="metric-card">
           <Heart size={20} />
-          <span>Saved listings</span>
+          <span>{tx("Saved listings")}</span>
           <strong>
             {favoritesQuery.data
               ? favoritesQuery.data.totalElements.toLocaleString("vi-VN")
@@ -62,21 +64,21 @@ function CustomerDashboard() {
         </article>
         <article className="metric-card">
           <Bot size={20} />
-          <span>AI assistant</span>
-          <strong>Ready</strong>
+          <span>{tx("AI assistant")}</span>
+          <strong>{tx("Ready")}</strong>
         </article>
         <article className="metric-card">
           <CalendarDays size={20} />
-          <span>Appointments</span>
-          <strong>Shortcut</strong>
+          <span>{tx("Appointments")}</span>
+          <strong>{tx("Shortcut")}</strong>
         </article>
       </div>
       {favoritesQuery.error ? (
         <div className="content-section">
           <EmptyState
-            title="Favorites summary could not be loaded"
+            title={tx("Favorites summary could not be loaded")}
             description={normalizeUnknownError(favoritesQuery.error).message}
-            action={<Button onClick={() => favoritesQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => favoritesQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
@@ -84,22 +86,22 @@ function CustomerDashboard() {
         <Link to="/favorites">
           <Heart size={18} />
           <span>
-            <strong>Favorites</strong>
-            Saved homes and listing detail shortcuts.
+            <strong>{tx("Favorites")}</strong>
+            {tx("Saved homes and listing detail shortcuts.")}
           </span>
         </Link>
         <Link to="/ai">
           <Bot size={18} />
           <span>
-            <strong>AI assistant</strong>
-            Ask for listing recommendations and buying guidance.
+            <strong>{tx("AI assistant")}</strong>
+            {tx("Ask for listing recommendations and buying guidance.")}
           </span>
         </Link>
         <Link to="/appointments">
           <CalendarDays size={18} />
           <span>
-            <strong>Appointments</strong>
-            Open appointment workflow when it becomes available.
+            <strong>{tx("Appointments")}</strong>
+            {tx("Open appointment workflow when it becomes available.")}
           </span>
         </Link>
       </div>
@@ -108,6 +110,7 @@ function CustomerDashboard() {
 }
 
 export function DashboardPage() {
+  const tx = useText();
   const { user } = useAuth();
   const roles = user?.roles ?? [];
   const dashboardRole = useMemo(() => getDashboardRole(roles), [roles]);
@@ -129,18 +132,18 @@ export function DashboardPage() {
     <section className="dashboard">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Dashboard</p>
+          <p className="eyebrow">{tx("Dashboard")}</p>
           <h2>{dashboardQuery.data?.title ?? `${dashboardRole} dashboard`}</h2>
-          <p className="muted">{dashboardQuery.data?.summary ?? "Loading dashboard metrics."}</p>
+          <p className="muted">{dashboardQuery.data?.summary ?? tx("Loading dashboard metrics.")}</p>
         </div>
       </div>
       {dashboardQuery.isLoading ? <DashboardSkeleton /> : null}
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Dashboard could not be loaded"
+            title={tx("Dashboard could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => dashboardQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => dashboardQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}

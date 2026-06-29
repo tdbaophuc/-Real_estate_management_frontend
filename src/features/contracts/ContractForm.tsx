@@ -7,6 +7,7 @@ import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import { useText } from "../../shared/i18n/useText";
 import type { ContractRecord, ContractRequest } from "./contractApi";
 
 const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
@@ -112,6 +113,7 @@ export function ContractForm({
   onSubmit: (values: ContractFormValues) => Promise<void>;
   submitLabel: string;
 }) {
+  const tx = useText();
   const [formError, setFormError] = useState<string | null>(null);
   const defaultValues = useMemo(() => toDefaultValues(contract), [contract]);
   const {
@@ -151,31 +153,31 @@ export function ContractForm({
 
   return (
     <form className="property-form" onSubmit={submit}>
-      <FormSection title="Basic">
-        <Input label="Code" error={errors.code?.message} {...register("code")} />
-        <Input label="Title" error={errors.title?.message} {...register("title")} />
-        <Select label="Type" options={typeOptions} error={errors.contractType?.message} {...register("contractType")} />
-        <Select label="Status" options={statusOptions} error={errors.status?.message} {...register("status")} />
+      <FormSection title={tx("Basic")}>
+        <Input label={tx("Code")} error={errors.code?.message} {...register("code")} />
+        <Input label={tx("Title")} error={errors.title?.message} {...register("title")} />
+        <Select label={tx("Type")} options={typeOptions.map((option) => ({ ...option, label: tx(option.label) }))} error={errors.contractType?.message} {...register("contractType")} />
+        <Select label={tx("Status")} options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))} error={errors.status?.message} {...register("status")} />
       </FormSection>
-      <FormSection title="Value and dates">
-        <Input label="Total value" error={errors.totalValue?.message} {...register("totalValue")} />
+      <FormSection title={tx("Value and dates")}>
+        <Input label={tx("Total value")} error={errors.totalValue?.message} {...register("totalValue")} />
         <Input
-          label="Currency"
+          label={tx("Currency")}
           error={errors.currency?.message}
           onInput={(event) => {
             event.currentTarget.value = event.currentTarget.value.toUpperCase();
           }}
           {...register("currency")}
         />
-        <Input label="Effective date" type="date" error={errors.effectiveDate?.message} {...register("effectiveDate")} />
-        <Input label="Start date" type="date" error={errors.startDate?.message} {...register("startDate")} />
-        <Input label="End date" type="date" error={errors.endDate?.message} {...register("endDate")} />
+        <Input label={tx("Effective date")} type="date" error={errors.effectiveDate?.message} {...register("effectiveDate")} />
+        <Input label={tx("Start date")} type="date" error={errors.startDate?.message} {...register("startDate")} />
+        <Input label={tx("End date")} type="date" error={errors.endDate?.message} {...register("endDate")} />
       </FormSection>
-      <FormSection title="Links">
-        <Input label="Customer id" error={errors.customerId?.message} {...register("customerId")} />
-        <Input label="Property id" error={errors.propertyId?.message} {...register("propertyId")} />
-        <Input label="Listing id" error={errors.listingId?.message} {...register("listingId")} />
-        <Input label="Transaction id" error={errors.transactionId?.message} {...register("transactionId")} />
+      <FormSection title={tx("Links")}>
+        <Input label={tx("Customer id")} error={errors.customerId?.message} {...register("customerId")} />
+        <Input label={tx("Property id")} error={errors.propertyId?.message} {...register("propertyId")} />
+        <Input label={tx("Listing id")} error={errors.listingId?.message} {...register("listingId")} />
+        <Input label={tx("Transaction id")} error={errors.transactionId?.message} {...register("transactionId")} />
       </FormSection>
       {formError ? <p className="form-alert">{formError}</p> : null}
       <div className="form-actions">

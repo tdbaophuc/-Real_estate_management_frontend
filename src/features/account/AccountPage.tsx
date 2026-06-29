@@ -10,6 +10,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { FileUploader } from "../../shared/ui/FileUploader";
 import { Input } from "../../shared/ui/Input";
 import { formatDate } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 
 type PasswordForm = {
   confirmPassword: string;
@@ -35,6 +36,7 @@ function formatDateTime(value: string) {
 }
 
 export function AccountPage() {
+  const tx = useText();
   const { fetchCurrentUser, logout, setCurrentUser, user } = useAuth();
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(user?.fullName ?? "");
@@ -59,7 +61,7 @@ export function AccountPage() {
       }),
     onSuccess: (updatedUser) => {
       setCurrentUser(updatedUser);
-      setProfileSuccess("Profile updated.");
+      setProfileSuccess(tx("Profile updated."));
     }
   });
 
@@ -68,7 +70,7 @@ export function AccountPage() {
     onSuccess: async (updatedUser) => {
       setCurrentUser(updatedUser);
       await fetchCurrentUser();
-      setProfileSuccess("Avatar updated.");
+      setProfileSuccess(tx("Avatar updated."));
     }
   });
 
@@ -76,7 +78,7 @@ export function AccountPage() {
     mutationFn: authApi.deleteAvatar,
     onSuccess: async () => {
       await fetchCurrentUser();
-      setProfileSuccess("Avatar removed.");
+      setProfileSuccess(tx("Avatar removed."));
     }
   });
 
@@ -84,7 +86,7 @@ export function AccountPage() {
     mutationFn: () => authApi.changePassword(passwordForm),
     onSuccess: () => {
       setPasswordForm(emptyPasswordForm);
-      setPasswordSuccess("Password changed. Please sign in again.");
+      setPasswordSuccess(tx("Password changed. Please sign in again."));
       window.setTimeout(() => {
         void logout();
       }, 900);
@@ -154,8 +156,8 @@ export function AccountPage() {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Account</p>
-          <h2>Profile and security</h2>
+          <p className="eyebrow">{tx("Account")}</p>
+          <h2>{tx("Profile and security")}</h2>
         </div>
       </div>
       <div className="account-grid">
@@ -167,20 +169,20 @@ export function AccountPage() {
               <UserRound size={32} />
             )}
             <div>
-              <strong>{user?.fullName ?? "User"}</strong>
-              <span>{user?.email ?? "No email"}</span>
-              <small>{user?.roles.join(", ") || "No role"}</small>
+              <strong>{user?.fullName ?? tx("User")}</strong>
+              <span>{user?.email ?? tx("No email")}</span>
+              <small>{user?.roles.join(", ") || tx("No role")}</small>
             </div>
           </div>
           <form className="form-stack" onSubmit={handleProfileSubmit}>
             <Input
-              label="Full name"
+              label={tx("Full name")}
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
               required
             />
             <Input
-              label="Phone"
+              label={tx("Phone")}
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
               placeholder="+84901234567"
@@ -190,7 +192,7 @@ export function AccountPage() {
             <div className="account-actions">
               <Button type="submit" disabled={!fullName.trim() || profileMutation.isPending}>
                 <Save size={16} />
-                Save profile
+                {tx("Save profile")}
               </Button>
             </div>
           </form>
@@ -212,12 +214,12 @@ export function AccountPage() {
               onClick={() => deleteAvatarMutation.mutate()}
             >
               <Trash2 size={16} />
-              Remove avatar
+              {tx("Remove avatar")}
             </Button>
             {avatarMutation.isPending ? (
               <span className="muted">
                 <Camera size={15} />
-                Uploading avatar
+                {tx("Uploading avatar")}
               </span>
             ) : null}
           </div>
@@ -227,31 +229,31 @@ export function AccountPage() {
           <div className="account-section-heading">
             <KeyRound size={18} />
             <div>
-              <h3>Password</h3>
-              <p className="muted">Changing password signs this session out after the backend revokes refresh tokens.</p>
+              <h3>{tx("Password")}</h3>
+              <p className="muted">{tx("Changing password signs this session out after the backend revokes refresh tokens.")}</p>
             </div>
           </div>
           <form className="form-stack" onSubmit={handlePasswordSubmit}>
             <Input
-              label="Current password"
+              label={tx("Current password")}
               type="password"
               value={passwordForm.currentPassword}
               onChange={(event) => updatePasswordField("currentPassword", event.target.value)}
               required
             />
             <Input
-              label="New password"
+              label={tx("New password")}
               type="password"
               value={passwordForm.newPassword}
               onChange={(event) => updatePasswordField("newPassword", event.target.value)}
               required
             />
             <Input
-              label="Confirm new password"
+              label={tx("Confirm new password")}
               type="password"
               value={passwordForm.confirmPassword}
               onChange={(event) => updatePasswordField("confirmPassword", event.target.value)}
-              error={passwordMismatch ? "Passwords do not match" : undefined}
+              error={passwordMismatch ? tx("Passwords do not match") : undefined}
               required
             />
             {normalizedPasswordError ? <p className="form-alert">{normalizedPasswordError.message}</p> : null}
@@ -268,7 +270,7 @@ export function AccountPage() {
                 }
               >
                 <ShieldCheck size={16} />
-                Change password
+                {tx("Change password")}
               </Button>
             </div>
           </form>
@@ -280,8 +282,8 @@ export function AccountPage() {
           <div className="account-section-heading">
             <MonitorCheck size={18} />
             <div>
-              <h3>Active sessions</h3>
-              <p className="muted">Review refresh-token sessions connected to this account.</p>
+              <h3>{tx("Active sessions")}</h3>
+              <p className="muted">{tx("Review refresh-token sessions connected to this account.")}</p>
             </div>
           </div>
           <Button
@@ -290,11 +292,11 @@ export function AccountPage() {
             onClick={() => setRevokeAllOpen(true)}
           >
             <XCircle size={16} />
-            Revoke all
+            {tx("Revoke all")}
           </Button>
         </div>
         {sessionsQuery.isLoading ? (
-          <EmptyState title="Loading sessions" description="Checking active sign-in sessions." />
+          <EmptyState title={tx("Loading sessions")} description={tx("Checking active sign-in sessions.")} />
         ) : null}
         {normalizedSessionError ? <p className="form-alert">{normalizedSessionError.message}</p> : null}
         {sessionsQuery.data?.length ? (
@@ -302,9 +304,9 @@ export function AccountPage() {
             {sessionsQuery.data.map((session) => (
               <article className="session-row" key={session.id}>
                 <div>
-                  <strong>Session #{session.id}</strong>
-                  <span>Created {session.createdAt ? formatDate(session.createdAt) : "Updating"}</span>
-                  <small>Expires {formatDateTime(session.expiresAt)}</small>
+                  <strong>{tx("Session")} #{session.id}</strong>
+                  <span>{tx("Created")} {session.createdAt ? formatDate(session.createdAt) : tx("Updating")}</span>
+                  <small>{tx("Expires")} {formatDateTime(session.expiresAt)}</small>
                 </div>
                 <Button
                   size="sm"
@@ -313,20 +315,20 @@ export function AccountPage() {
                   onClick={() => setPendingSessionId(session.id)}
                 >
                   <Trash2 size={16} />
-                  Revoke
+                  {tx("Revoke")}
                 </Button>
               </article>
             ))}
           </div>
         ) : !sessionsQuery.isLoading ? (
-          <EmptyState title="No sessions found" description="The backend did not return active sessions for this account." />
+          <EmptyState title={tx("No sessions found")} description={tx("The backend did not return active sessions for this account.")} />
         ) : null}
       </section>
 
       <ConfirmDialog
         open={Boolean(pendingSessionId)}
-        title="Revoke session"
-        description={`Revoke session #${pendingSessionId}?`}
+        title={tx("Revoke session")}
+        description={`${tx("Revoke session")} #${pendingSessionId}?`}
         onCancel={() => setPendingSessionId(null)}
         onConfirm={() => {
           if (pendingSessionId) {
@@ -336,8 +338,8 @@ export function AccountPage() {
       />
       <ConfirmDialog
         open={revokeAllOpen}
-        title="Revoke all sessions"
-        description="Revoke every refresh-token session for this account?"
+        title={tx("Revoke all sessions")}
+        description={tx("Revoke every refresh-token session for this account?")}
         onCancel={() => setRevokeAllOpen(false)}
         onConfirm={() => revokeAllMutation.mutate()}
       />

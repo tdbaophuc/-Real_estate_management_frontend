@@ -1,4 +1,5 @@
 import { forwardRef, type SelectHTMLAttributes } from "react";
+import { useText } from "../i18n/useText";
 import { cn } from "../lib/cn";
 
 type SelectOption = {
@@ -14,11 +15,12 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, error, id, label, options, ...props }, ref) => {
+    const tx = useText();
     const selectId = id ?? props.name;
 
     return (
       <label className="field" htmlFor={selectId}>
-        {label ? <span>{label}</span> : null}
+        {label ? <span>{tx(label)}</span> : null}
         <select
           ref={ref}
           id={selectId}
@@ -27,15 +29,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {tx(option.label)}
             </option>
           ))}
         </select>
-        {error ? <small className="field-error">{error}</small> : null}
+        {error ? <small className="field-error">{tx(error)}</small> : null}
       </label>
     );
   }
 );
 
 Select.displayName = "Select";
-

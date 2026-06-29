@@ -1,24 +1,26 @@
 ---
 version: "alpha"
 name: "HeritageEstate"
-description: "Visual identity and design system tokens for the Real Estate Management and CRM Platform."
+description: "Enterprise design system tokens for a real estate management, listings, CRM, contracts, and operations platform."
 
 colors:
-  # Brand Colors
-  primary: "#0B192C"           # Deep Ink Navy - Xanh mực sẫm (Chữ chính, Sidebar, tạo sự đầm, cao cấp)
-  secondary: "#4A5568"         # Slate Gray - Xám đá (Phụ đề, icon, caption, metadata thứ cấp)
-  tertiary: "#10B981"          # Mint Emerald - Xanh ngọc mint (Sole interaction driver - chỉ dùng cho nút chốt cọc, nút quan trọng)
-  
-  # Structural Colors
-  neutral-light: "#F8FAFC"     # Limestone Foundation - Trắng thạch vôi (Nền tổng thể dịu mắt hơn màu trắng tinh)
-  neutral-dark: "#0F172A"      # Charcoal Dark - Text chính (Đỡ mỏi mắt hơn màu đen tuyền #000)
-  surface: "#FFFFFF"           # Pure White - Nền của các thẻ Card thông tin, khối bảng biểu
-  border: "#E2E8F0"            # Light Slate - Màu của đường kẻ mảnh, tinh tế
-  
-  # Semantic States (CRM Pipeline & Alerts)
-  state-new: "#64748B"         # Muted Slate (Trạng thái Lead mới)
-  state-contacted: "#F59E0B"   # Warm Amber (Trạng thái Đang liên hệ)
-  state-negotiating: "#EF4444" # Crimson Red (Trạng thái Đang thương lượng / Cần chú ý)
+  # Brand colors
+  primary: "#14323E"           # Deep estate teal. Primary navigation, main actions, durable brand surfaces.
+  secondary: "#5B6B73"         # Operational slate. Secondary text, icons, metadata, quiet controls.
+  tertiary: "#7C4A03"          # Trust bronze. High-value business actions only: close deal, approve, paid.
+
+  # Structural colors
+  neutral-light: "#F5F7F8"     # App canvas. Calm office background for long operating sessions.
+  neutral-dark: "#172126"      # Primary text. Softer than black while retaining enterprise contrast.
+  surface: "#FFFFFF"           # Cards, tables, drawers, dialogs.
+  border: "#D7E0E2"            # Low-noise separators and input outlines.
+
+  # Semantic states
+  state-new: "#50616A"         # New records, neutral work queue.
+  state-contacted: "#8A5A00"   # In-progress contact, appointments, review queues.
+  state-negotiating: "#A33A32" # Urgent negotiation, cancellation, risk, failed workflows.
+  state-won: "#1F6F4A"         # Closed won, paid, approved, completed.
+  state-info: "#2E5EAA"        # Informational status, linked records, system notices.
 
 typography:
   h1:
@@ -29,11 +31,11 @@ typography:
   h2:
     fontFamily: Plus Jakarta Sans, sans-serif
     fontSize: 1.5rem
-    fontWeight: 600
+    fontWeight: 650
     lineHeight: 1.3
   body-md:
     fontFamily: Inter, sans-serif
-    fontSize: 0.9375rem        # 15px tiêu chuẩn công nghiệp giúp giao diện thanh thoát
+    fontSize: 0.9375rem
     fontWeight: 400
     lineHeight: 1.6
   label-caps:
@@ -44,77 +46,171 @@ typography:
 
 rounded:
   none: 0px
-  sm: 6px                      # Bo góc nhẹ cho nút bấm nhỏ, ô nhập liệu Input
-  md: 12px                     # Bo góc vừa cho các nút lớn, thanh điều hướng
-  lg: 16px                     # Bo góc lớn mềm mại cho các khối Card BĐS, khối Kanban
+  sm: 6px
+  md: 8px
+  lg: 12px
 
 spacing:
   xs: 8px
   sm: 12px
-  md: 24px                     # Padding rộng rãi giúp giao diện có "khoảng thở" sang trọng
-  lg: 32px                     # Khoảng cách giữa các cấu phần lớn trên Dashboard
+  md: 20px
+  lg: 28px
 
 components:
+  app-shell:
+    backgroundColor: "{colors.neutral-light}"
+    textColor: "{colors.neutral-dark}"
+  sidebar:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
+  topbar:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
+  divider:
+    backgroundColor: "{colors.border}"
+    height: 1px
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "#FFFFFF"
     rounded: "{rounded.sm}"
     padding: 12px
   button-primary-hover:
-    backgroundColor: "#112239"
+    backgroundColor: "#0F2630"
+    textColor: "#FFFFFF"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
+    rounded: "{rounded.sm}"
+    padding: 12px
   button-action:
     backgroundColor: "{colors.tertiary}"
     textColor: "#FFFFFF"
     rounded: "{rounded.sm}"
     padding: 12px
+  input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
+    rounded: "{rounded.sm}"
+  table:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
+  kanban-column:
+    backgroundColor: "#EEF3F4"
+    textColor: "{colors.neutral-dark}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.sm}"
   kanban-card:
     backgroundColor: "{colors.surface}"
+    textColor: "{colors.neutral-dark}"
     rounded: "{rounded.lg}"
     padding: "{spacing.md}"
+  badge-new:
+    backgroundColor: "#E8EEF0"
+    textColor: "{colors.state-new}"
+  badge-contacted:
+    backgroundColor: "#FFF2D6"
+    textColor: "{colors.state-contacted}"
+  badge-negotiating:
+    backgroundColor: "#FCE8E6"
+    textColor: "{colors.state-negotiating}"
+  badge-won:
+    backgroundColor: "#E4F4EC"
+    textColor: "{colors.state-won}"
+  badge-info:
+    backgroundColor: "#E7EEFA"
+    textColor: "{colors.state-info}"
 ---
 
 ## Overview
 
-Architectural Minimalism meets Journalistic Gravitas. Giao diện được định hình theo phong cách tối giản cao cấp, hướng tới sự rõ ràng tuyệt đối của dữ liệu. Hệ thống loại bỏ hoàn toàn các chi tiết trang trí thừa thãi của AI (như bôi màu lòe loẹt, đổ bóng dày đặc) để tạo ra không gian làm việc chuyên nghiệp cho Agent và Manager.
+HeritageEstate uses an enterprise operations style: quiet, structured, and optimized for repeat daily work. The interface should feel like a reliable business system for agents, managers, finance, and admin teams, not a promotional real estate landing page.
 
-## Colors
+The product handles high-value workflows: property inventory, listings, customer CRM, Lead Pipeline, appointments, contracts, transactions, commissions, reports, AI assistance, and audit logs. Design choices must support scanning, comparison, review, and confident action.
 
-Bảng màu tập trung vào độ tương phản cao của các sắc độ trung tính, kết hợp duy nhất một màu nhấn có chủ đích.
-- **Primary (#0B192C):** Sắc xanh mực sẫm hoàng gia. Dùng cho tiêu đề lớn, Sidebar điều hướng và các vùng nhấn thương hiệu.
-- **Secondary (#4A5568):** Sắc xám phiến thạch thanh lịch. Dùng cho đường kẻ mảnh, icon, captions và thông tin metadata thứ cấp.
-- **Tertiary (#10B981):** Xanh Mint Emerald. Đây là "Sole Driver" cho mọi hành động tạo ra giá trị: Chốt cọc, Hợp đồng ký kết, trạng thái `CLOSED_WON`.
+## Color System
+
+The palette is intentionally grounded in real estate operations:
+
+- **Primary (#14323E):** Deep estate teal. Use for primary actions, active navigation, selected controls, and durable brand elements.
+- **Secondary (#5B6B73):** Operational slate. Use for helper text, metadata, inactive icons, and secondary information.
+- **Tertiary (#7C4A03):** Trust bronze. Reserve for high-value business actions only: approve, close deal, mark paid, finalize.
+- **Neutral light (#F5F7F8):** Main canvas. It keeps table-heavy views calm during long sessions.
+- **Neutral dark (#172126):** Primary text. It gives strong readability without harsh black.
+- **Surface (#FFFFFF):** Cards, tables, dialogs, drawers, and input surfaces.
+- **Border (#D7E0E2):** Structural separation. Use sparingly and consistently.
+
+Semantic states must be stable across the CRM:
+
+- **New:** neutral slate.
+- **Contacted / pending / review:** amber brown.
+- **Negotiating / danger / cancelled:** muted red.
+- **Won / completed / paid / approved:** deep green.
+- **Info / linked / system:** business blue.
 
 ## Typography
 
-Sự kết hợp giữa font chữ tiêu đề hình khối hiện đại (`Plus Jakarta Sans`) và font chữ nội dung hình học (`Inter`) giúp tối ưu hiệu suất đọc thông tin tần suất cao.
-- **Phân cấp bằng độ dày (Weight Contrast):** Tiêu đề bắt buộc sử dụng `font-bold` (700) kết hợp với nội dung `font-normal` (400). 
-- **Quy tắc viết chữ:** Không sử dụng tính năng viết hoa toàn bộ (`UPPERCASE`) cho các nhãn dữ liệu hoặc tiêu đề cột. Sử dụng `Sentence case` để giao diện nhìn tự nhiên và dễ tiếp cận.
+- Use `Plus Jakarta Sans` for page headings and section headings.
+- Use `Inter` for dense operational content: tables, forms, cards, drawers.
+- Use `Space Grotesk` with `letterSpacing: 0.05em` for compact labels such as language switchers, eyebrows, and small operational controls.
+- Use Sentence case for labels, table headers, Kanban columns, and buttons. Do not use all-caps UI labels except raw technical values that are data, not interface copy.
 
-## Layout & Spacing
+## Layout And Density
 
-Whitespace (Khoảng trống) được coi là một thành phần thiết kế cốt lõi chứ không phải khoảng đất trống.
-- **Khoảng thở hệ thống:** Tăng khoảng cách đệm (Padding/Margin) lên mức `24px` (`spacing.md`) cho các Card khối. Khối thông tin càng quan trọng thì khoảng thở xung quanh càng lớn.
-- **Phân tách bằng không gian:** Hạn chế tối đa việc lạm dụng các đường kẻ ngang dọc (`border`) để chia vùng. Hãy dùng chính khoảng trống và các mảng màu nền `neutral-light` để phân chia phân khu chức năng.
+This system should prioritize productive density over decorative whitespace:
 
-## Shapes
+- Tables and filters should remain compact and scannable.
+- Cards are for repeated records, dialogs, drawers, and tool panels. Do not nest cards inside cards.
+- Filter bars should keep action buttons stable in width across languages.
+- Use spacing `md` for primary content sections and `sm` for dense forms or Kanban columns.
+- On mobile, preserve hierarchy and avoid horizontal overflow rather than shrinking type aggressively.
 
-- **Bất đối xứng tinh tế:** Các phần tử tương tác nhỏ (Buttons, Input) sử dụng bo góc góc hẹp `sm` (6px) để giữ tính nghiêm túc, sắc nét. Các thùng chứa lớn (Cards, Kanban Board Column) sử dụng bo góc rộng `lg` (16px) để tạo sự dễ chịu, hiện đại cho tổng thể layout.
+## Shapes And Elevation
 
-## Components
+- Interactive controls use `rounded.sm` (6px). This keeps the product crisp and enterprise-grade.
+- Containers use `rounded.md` or `rounded.lg`, never pill-shaped corners unless the element is a badge.
+- Shadows must be subtle and neutral. Use elevation to separate layers, not to decorate.
 
-### CRM Kanban Board (Lead Pipeline)
-- **Cột trạng thái:** Sử dụng nền màu xám cực nhẹ `neutral-light`, tuyệt đối không có border bao quanh. Khoảng cách giữa các cột là `24px`.
-- **Thẻ Lead Card:** Sử dụng nền trắng `surface`, bo góc `lg`. Hiệu ứng đổ bóng phải cực kỳ mờ mịn (`shadow-[0_2px_8px_rgba(0,0,0,0.03)]`) để tạo cảm giác thẻ nằm nhẹ trên mặt giấy phẳng.
-- **Chỉ báo độ ưu tiên:** Hiển thị độ ưu tiên (được tính toán từ AI Lead Score) bằng một chấm tròn nhỏ thanh lịch ở góc thẻ, không bôi màu lên toàn bộ thẻ.
+## Component Rules
 
-## Do's and Don'ts
+### Buttons
 
-### Do's
-- Luôn giữ tỷ lệ khoảng trống (Whitespace) chiếm tối thiểu 35% diện tích của một khối bảng biểu.
-- Phân biệt các cấp bậc thông tin bằng sắc độ chữ (`neutral-dark` cho text chính, `secondary` cho text phụ).
-- Đảm bảo độ tương phản của chữ trên nền luôn đạt chuẩn WCAG AA thông qua lệnh kiểm thử.
+- Primary buttons use `primary` with white text.
+- Secondary buttons are white with border and dark text.
+- High-value business actions may use `tertiary`, but only when the action creates financial or workflow finality.
+- Destructive buttons use danger red and must be paired with explicit confirmation for irreversible actions.
 
-### Don'ts
-- Không sử dụng hiệu ứng đổ bóng lem, dày hoặc có màu sắc sặc sỡ.
-- Không tự ý bo góc các nút bấm thành hình tròn xoe (border-radius: 9999px).
-- Không lạm dụng màu nhấn `tertiary` (Mint Emerald) cho các tác vụ thông thường.
+### Forms
+
+- Inputs use white surface, dark text, border token, and 6px radius.
+- Validation badges and messages must be readable at WCAG AA contrast.
+- Field labels use Sentence case and concise wording.
+
+### CRM Kanban Board
+
+- Kanban columns use a muted background, no heavy border, and compact spacing.
+- Lead cards use white surface, subtle shadow, and clearly separated metadata.
+- Status labels must render as human-readable Sentence case, not raw enum values.
+- Priority should be indicated with small badges or dots, not full-card color fills.
+
+### Data Tables
+
+- Tables are the primary enterprise view. They should be dense but readable.
+- Column headers use Sentence case.
+- Row actions should be compact and right-aligned.
+- Empty states should explain the next useful action without marketing copy.
+
+## Do
+
+- Keep contrast WCAG AA for text on colored backgrounds.
+- Prefer neutral surfaces and one purposeful action color.
+- Preserve technical nouns such as Lead, Pipeline, CRM, Listing, Contract, Transaction, Kanban, and AI when they are domain terms.
+- Make controls stable across English and Vietnamese labels.
+- Use semantic status color consistently across every module.
+
+## Do Not
+
+- Do not use national flags for language switching.
+- Do not use bright real-estate advertising colors, glossy gradients, colorful shadows, or decorative blobs.
+- Do not overuse bronze accent for ordinary actions.
+- Do not make operational screens look like landing pages.
+- Do not use `border-radius: 9999px` for normal buttons or inputs.

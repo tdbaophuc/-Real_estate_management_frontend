@@ -10,6 +10,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Pagination } from "../../shared/ui/Pagination";
 import { Table } from "../../shared/ui/Table";
+import { useText } from "../../shared/i18n/useText";
 import { getAuditLog, searchAuditLogs, type AuditLogSearchParams } from "./auditLogApi";
 
 const pageSize = 10;
@@ -44,6 +45,7 @@ function formatMaybeDate(value: string) {
 }
 
 export function AuditLogsPage() {
+  const tx = useText();
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<AuditFilters>({
     action: "",
@@ -96,31 +98,31 @@ export function AuditLogsPage() {
       <div className="section-header">
         <div>
           <p className="eyebrow">Admin</p>
-          <h2>Audit logs</h2>
+          <h2>{tx("Audit logs")}</h2>
         </div>
       </div>
       <form className="filter-bar audit-filter-bar" onSubmit={submitSearch}>
-        <Input label="Action" value={filters.action} onChange={(event) => updateFilter("action", event.target.value)} placeholder="USER_STATUS_CHANGED" />
-        <Input label="Resource" value={filters.resourceType} onChange={(event) => updateFilter("resourceType", event.target.value)} placeholder="USER, LISTING" />
-        <Input label="Actor" value={filters.actor} onChange={(event) => updateFilter("actor", event.target.value)} placeholder="Name or email" />
-        <DatePicker label="Start date" max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => updateFilter("startDate", event.target.value)} />
-        <DatePicker label="End date" min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
+        <Input label={tx("Action")} value={filters.action} onChange={(event) => updateFilter("action", event.target.value)} placeholder="USER_STATUS_CHANGED" />
+        <Input label={tx("Resource")} value={filters.resourceType} onChange={(event) => updateFilter("resourceType", event.target.value)} placeholder="USER, LISTING" />
+        <Input label={tx("Actor")} value={filters.actor} onChange={(event) => updateFilter("actor", event.target.value)} placeholder={tx("Name or email")} />
+        <DatePicker label={tx("Start date")} max={filters.endDate || undefined} value={filters.startDate} onChange={(event) => updateFilter("startDate", event.target.value)} />
+        <DatePicker label={tx("End date")} min={filters.startDate || undefined} value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={auditLogsQuery.isFetching}>
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {tx("Reset")}
           </Button>
         </div>
       </form>
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Audit logs could not be loaded"
+            title={tx("Audit logs could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => auditLogsQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => auditLogsQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
@@ -132,7 +134,7 @@ export function AuditLogsPage() {
       ) : null}
       {auditLogsQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No audit logs found" description="Adjust filters to inspect more activity." action={<Button onClick={resetSearch}>Clear filters</Button>} />
+          <EmptyState title={tx("No audit logs found")} description={tx("Adjust filters to inspect more activity.")} action={<Button onClick={resetSearch}>{tx("Clear filters")}</Button>} />
         </div>
       ) : null}
       {auditLogsQuery.data && auditLogsQuery.data.content.length > 0 ? (
@@ -140,10 +142,10 @@ export function AuditLogsPage() {
           <Table>
             <thead>
               <tr>
-                <th>Action</th>
-                <th>Resource</th>
-                <th>Actor</th>
-                <th>Time</th>
+                <th>{tx("Action")}</th>
+                <th>{tx("Resource")}</th>
+                <th>{tx("Actor")}</th>
+                <th>{tx("Time")}</th>
                 <th />
               </tr>
             </thead>
@@ -166,7 +168,7 @@ export function AuditLogsPage() {
                   <td>
                     <Button size="sm" variant="secondary" onClick={() => setSelectedAuditId(log.id)}>
                       <Eye size={16} />
-                      Detail
+                      {tx("Detail")}
                     </Button>
                   </td>
                 </tr>

@@ -1,8 +1,12 @@
 import { Building2, LogIn, Search } from "lucide-react";
 import { Link, NavLink, Outlet } from "react-router-dom";
+import { LanguageSwitcher } from "../../shared/i18n/LanguageSwitcher";
+import { useText } from "../../shared/i18n/useText";
 import { Button } from "../../shared/ui/Button";
 
 export function PublicLayout() {
+  const tx = useText();
+
   return (
     <div className="page-shell">
       <header className="public-header">
@@ -12,15 +16,16 @@ export function PublicLayout() {
           </span>
           <span>RealEstate Pro</span>
         </Link>
-        <nav className="public-nav" aria-label="Public navigation">
+        <nav className="public-nav" aria-label={tx("Public navigation")}>
           <NavLink to="/">
             <Search size={16} />
-            Search
+            {tx("Search")}
           </NavLink>
+          <LanguageSwitcher />
           <Button asChild variant="secondary" size="sm">
             <Link to="/login">
               <LogIn size={16} />
-              Login
+              {tx("Login")}
             </Link>
           </Button>
         </nav>
@@ -31,4 +36,3 @@ export function PublicLayout() {
     </div>
   );
 }
-

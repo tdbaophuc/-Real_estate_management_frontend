@@ -3,20 +3,24 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Building2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { useAuth } from "../../shared/auth/useAuth";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import { useText } from "../../shared/i18n/useText";
 import type { RoleCode } from "../../shared/types/auth";
 
-const loginSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required")
-});
+function createLoginSchema(t: (key: string) => string) {
+  return z.object({
+    email: z.string().trim().email(t("validation.validEmailAddress")),
+    password: z.string().min(1, t("validation.passwordRequired"))
+  });
+}
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginFormValues = z.infer<ReturnType<typeof createLoginSchema>>;
 
 const roleOptions = [
   { label: "Admin demo", value: "ADMIN" },
@@ -26,9 +30,12 @@ const roleOptions = [
 ];
 
 export function LoginPage() {
+  const { t } = useTranslation();
+  const tx = useText();
   const { isAuthenticated, login, loginAsDemo } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const loginSchema = createLoginSchema(t);
   const [role, setRole] = useState<RoleCode>("ADMIN");
   const [formError, setFormError] = useState<string | null>(null);
   const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
@@ -76,20 +83,20 @@ export function LoginPage() {
             <Building2 size={22} />
           </span>
           <div>
-            <p className="eyebrow">Secure access</p>
-            <h1>Sign in to your workspace</h1>
+            <p className="eyebrow">{tx("Secure access")}</p>
+            <h1>{tx("Sign in to your workspace")}</h1>
           </div>
         </div>
         <form className="form-stack" onSubmit={onSubmit}>
           <Input
-            label="Email"
+            label={tx("Email")}
             type="email"
             autoComplete="email"
             error={errors.email?.message}
             {...register("email")}
           />
           <Input
-            label="Password"
+            label={tx("Password")}
             type="password"
             autoComplete="current-password"
             error={errors.password?.message}
@@ -97,14 +104,14 @@ export function LoginPage() {
           />
           {formError ? <p className="form-alert">{formError}</p> : null}
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Login"}
+            {isSubmitting ? tx("Signing in...") : tx("Login")}
           </Button>
         </form>
         <div className="auth-demo">
           <Select
-            label="Demo role"
+            label={tx("Demo role")}
             name="role"
-            options={roleOptions}
+            options={roleOptions.map((option) => ({ ...option, label: tx(option.label) }))}
             value={role}
             onChange={(event) => setRole(event.target.value as RoleCode)}
           />
@@ -116,7 +123,7 @@ export function LoginPage() {
               navigate(from, { replace: true });
             }}
           >
-            Use demo session
+            {tx("Use demo session")}
           </Button>
         </div>
       </div>

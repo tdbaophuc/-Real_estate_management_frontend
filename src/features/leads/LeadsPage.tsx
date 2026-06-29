@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -11,6 +12,7 @@ import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
 import { searchLeads, type LeadPipelineStatus, type LeadRecord, type LeadSearchParams } from "./leadApi";
+import { leadStatusKey } from "./leadLabels";
 
 const pageSize = 10;
 
@@ -24,18 +26,6 @@ const pipelineStatuses: LeadPipelineStatus[] = [
   "CLOSED_WON",
   "CLOSED_LOST",
   "INVALID"
-];
-
-const statusOptions = [
-  { label: "Any status", value: "" },
-  ...pipelineStatuses.map((status) => ({ label: status.replace(/_/g, " "), value: status }))
-];
-
-const priorityOptions = [
-  { label: "Any priority", value: "" },
-  { label: "High", value: "HIGH" },
-  { label: "Medium", value: "MEDIUM" },
-  { label: "Low", value: "LOW" }
 ];
 
 type LeadFilters = {
@@ -114,6 +104,7 @@ function groupLeads(leads: LeadRecord[]) {
 }
 
 export function LeadsPage() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPage = Number(searchParams.get("page") ?? 0) || 0;
   const committedFilters = useMemo(() => getInitialFilters(searchParams), [searchParams]);
@@ -130,6 +121,22 @@ export function LeadsPage() {
     retry: 1
   });
   const normalizedError = leadsQuery.error ? normalizeUnknownError(leadsQuery.error) : null;
+  const statusOptions = useMemo(
+    () => [
+      { label: t("common.anyStatus"), value: "" },
+      ...pipelineStatuses.map((status) => ({ label: t(leadStatusKey(status)), value: status }))
+    ],
+    [t]
+  );
+  const priorityOptions = useMemo(
+    () => [
+      { label: t("common.anyPriority"), value: "" },
+      { label: t("common.high"), value: "HIGH" },
+      { label: t("common.medium"), value: "MEDIUM" },
+      { label: t("common.low"), value: "LOW" }
+    ],
+    [t]
+  );
 
   useEffect(() => {
     setFilters(committedFilters);
@@ -154,52 +161,52 @@ export function LeadsPage() {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Leads</p>
-          <h2>Lead pipeline</h2>
+          <p className="eyebrow">{t("leads.leads")}</p>
+          <h2>{t("leads.leadPipeline")}</h2>
         </div>
       </div>
       <form className="filter-bar lead-filter-bar" onSubmit={submitSearch}>
         <Input
-          label="Keyword"
+          label={t("common.keyword")}
           value={filters.keyword}
           onChange={(event) => updateFilter("keyword", event.target.value)}
-          placeholder="Name, email, phone, code"
+          placeholder={t("placeholders.nameEmailPhone")}
         />
-        <Select label="Status" options={statusOptions} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
-        <Select label="Priority" options={priorityOptions} value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value)} />
+        <Select label={t("common.status")} options={statusOptions} value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} />
+        <Select label={t("common.priority")} options={priorityOptions} value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value)} />
         <div className="filter-actions">
           <Button type="submit" disabled={leadsQuery.isFetching}>
             <Search size={16} />
-            Search
+            {t("actions.search")}
           </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            Reset
+            {t("actions.reset")}
           </Button>
         </div>
       </form>
       <section className="content-section">
         <div className="section-header">
           <div>
-            <p className="eyebrow">Board</p>
-            <h2>Pipeline status</h2>
+            <p className="eyebrow">{t("leads.board")}</p>
+            <h2>{t("leads.pipelineStatus")}</h2>
           </div>
         </div>
         {boardQuery.error ? (
-          <EmptyState title="Pipeline board unavailable" description={normalizeUnknownError(boardQuery.error).message} action={<Button onClick={() => boardQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={t("leads.pipelineBoardUnavailable")} description={normalizeUnknownError(boardQuery.error).message} action={<Button onClick={() => boardQuery.refetch()}>{t("actions.retry")}</Button>} />
         ) : null}
         <div className="lead-board">
           {groupLeads(boardQuery.data?.content ?? []).map((column) => (
             <article className="lead-board-column" key={column.status}>
               <header>
-                <StatusBadge tone={statusTone(column.status)}>{column.status.replace(/_/g, " ")}</StatusBadge>
+                <StatusBadge tone={statusTone(column.status)}>{t(leadStatusKey(column.status))}</StatusBadge>
                 <strong>{column.leads.length}</strong>
               </header>
               {column.leads.length ? column.leads.slice(0, 5).map((lead) => (
                 <Link className="lead-board-card" to={`/leads/${lead.id}`} key={lead.id}>
                   <strong>{lead.fullName}</strong>
-                  <small>{lead.code} / {lead.priority}</small>
+                  <small>{lead.code} / {t(`common.${lead.priority.toLowerCase()}`)}</small>
                 </Link>
-              )) : <small className="muted">No leads</small>}
+              )) : <small className="muted">{t("leads.noLeads")}</small>}
             </article>
           ))}
         </div>
@@ -212,12 +219,12 @@ export function LeadsPage() {
       ) : null}
       {normalizedError ? (
         <div className="content-section">
-          <EmptyState title="Leads could not be loaded" description={normalizedError.message} action={<Button onClick={() => leadsQuery.refetch()}>Retry</Button>} />
+          <EmptyState title={t("leads.couldNotLoad")} description={normalizedError.message} action={<Button onClick={() => leadsQuery.refetch()}>{t("actions.retry")}</Button>} />
         </div>
       ) : null}
       {leadsQuery.data?.content.length === 0 ? (
         <div className="content-section">
-          <EmptyState title="No leads found" description="Adjust filters to see more opportunities." action={<Button onClick={resetSearch}>Clear filters</Button>} />
+          <EmptyState title={t("leads.noLeadsFound")} description={t("leads.adjustFilters")} action={<Button onClick={resetSearch}>{t("actions.clearFilters")}</Button>} />
         </div>
       ) : null}
       {leadsQuery.data && leadsQuery.data.content.length > 0 ? (
@@ -225,11 +232,11 @@ export function LeadsPage() {
           <Table>
             <thead>
               <tr>
-                <th>Lead</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Source</th>
-                <th>Agent</th>
+                <th>{t("common.lead")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("common.priority")}</th>
+                <th>{t("common.source")}</th>
+                <th>{t("common.agent")}</th>
                 <th />
               </tr>
             </thead>
@@ -240,13 +247,13 @@ export function LeadsPage() {
                     <strong>{lead.fullName}</strong>
                     <small>{lead.email || lead.phone || lead.code}</small>
                   </td>
-                  <td><StatusBadge tone={statusTone(lead.pipelineStatus)}>{lead.pipelineStatus}</StatusBadge></td>
-                  <td><StatusBadge tone={priorityTone(lead.priority)}>{lead.priority}</StatusBadge></td>
+                  <td><StatusBadge tone={statusTone(lead.pipelineStatus)}>{t(leadStatusKey(lead.pipelineStatus))}</StatusBadge></td>
+                  <td><StatusBadge tone={priorityTone(lead.priority)}>{t(`common.${lead.priority.toLowerCase()}`)}</StatusBadge></td>
                   <td>{lead.sourceCode}</td>
-                  <td>{lead.assignedAgentId ?? "Unassigned"}</td>
+                  <td>{lead.assignedAgentId ?? t("common.unassigned")}</td>
                   <td>
                     <Button asChild variant="secondary" size="sm">
-                      <Link to={`/leads/${lead.id}`}>Open</Link>
+                      <Link to={`/leads/${lead.id}`}>{t("actions.open")}</Link>
                     </Button>
                   </td>
                 </tr>

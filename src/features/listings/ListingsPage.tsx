@@ -11,6 +11,7 @@ import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import { searchListings, type ListingPurpose, type ListingSearchParams } from "./listingApi";
 
 const PAGE_SIZE = 12;
@@ -74,6 +75,7 @@ function toApiParams(filters: ReturnType<typeof getInitialFilters>, page: number
 }
 
 export function ListingsPage() {
+  const tx = useText();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState(() => getInitialFilters(searchParams));
   const committedFilters = useMemo(() => getInitialFilters(searchParams), [searchParams]);
@@ -121,59 +123,59 @@ export function ListingsPage() {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Listings</p>
-          <h2>Internal listing workflow</h2>
+          <p className="eyebrow">{tx("Listings")}</p>
+          <h2>{tx("Internal listing workflow")}</h2>
         </div>
         <Button asChild>
           <Link to="/listings/new">
             <FilePlus2 size={16} />
-            New listing
+            {tx("New listing")}
           </Link>
         </Button>
       </div>
       <form className="filter-bar listing-filter-bar" onSubmit={applyFilters}>
         <Input
-          label="Keyword"
+          label={tx("Keyword")}
           value={filters.keyword}
           onChange={(event) => updateFilter("keyword", event.target.value)}
-          placeholder="Title, code, slug"
+          placeholder={tx("Title, code, slug")}
         />
         <Select
-          label="Status"
+          label={tx("Status")}
           value={filters.status}
           onChange={(event) => updateFilter("status", event.target.value)}
-          options={statusOptions}
+          options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))}
         />
         <Select
-          label="Purpose"
+          label={tx("Purpose")}
           value={filters.purpose}
           onChange={(event) => updateFilter("purpose", event.target.value)}
-          options={purposeOptions}
+          options={purposeOptions.map((option) => ({ ...option, label: tx(option.label) }))}
         />
         <Input
-          label="Property id"
+          label={tx("Property id")}
           value={filters.propertyId}
           onChange={(event) => updateFilter("propertyId", event.target.value)}
-          placeholder="Optional"
+          placeholder={tx("Optional")}
         />
         <div className="filter-actions">
           <Button type="submit">
             <Search size={16} />
-            Search
+            {tx("Search")}
           </Button>
         </div>
       </form>
       {listingsQuery.isLoading ? (
         <section className="content-section">
-          <EmptyState title="Loading listings" description="Fetching internal listing workflow records." />
+          <EmptyState title={tx("Loading listings")} description={tx("Fetching internal listing workflow records.")} />
         </section>
       ) : null}
       {normalizedError ? (
         <section className="content-section">
           <EmptyState
-            title="Listings could not be loaded"
+            title={tx("Listings could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => listingsQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => listingsQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </section>
       ) : null}
@@ -193,12 +195,12 @@ export function ListingsPage() {
                       {listing.code} / {listing.property?.name ?? `Property #${listing.propertyId ?? "n/a"}`} / {listing.slug || "slug pending"}
                     </p>
                     <p className="muted">
-                      {listing.creator?.fullName ? `Created by ${listing.creator.fullName}` : "Creator updating"}
+                      {listing.creator?.fullName ? `${tx("Created by")} ${listing.creator.fullName}` : tx("Creator updating")}
                     </p>
                   </div>
                   <div className="listing-workflow-metrics">
                     <strong>
-                      {listing.askingPrice ? formatCurrency(listing.askingPrice, listing.currency) : "Price updating"}
+                      {listing.askingPrice ? formatCurrency(listing.askingPrice, listing.currency) : tx("Price updating")}
                     </strong>
                     <span>
                       <Eye size={15} />
@@ -210,18 +212,18 @@ export function ListingsPage() {
                     </span>
                   </div>
                   <Button asChild variant="secondary" size="sm">
-                    <Link to={`/listings/${listing.id}/edit`}>Edit</Link>
+                    <Link to={`/listings/${listing.id}/edit`}>{tx("Edit")}</Link>
                   </Button>
                 </article>
               ))
             ) : (
               <div className="content-section">
                 <EmptyState
-                  title="No listings found"
-                  description="Create a draft listing or adjust filters to see internal workflow records."
+                  title={tx("No listings found")}
+                  description={tx("Create a draft listing or adjust filters to see internal workflow records.")}
                   action={
                     <Button asChild>
-                      <Link to="/listings/new">Create listing</Link>
+                      <Link to="/listings/new">{tx("Create listing")}</Link>
                     </Button>
                   }
                 />
