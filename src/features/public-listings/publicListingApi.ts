@@ -126,7 +126,13 @@ function readBoolean(source: BackendListing, keys: string[]) {
 }
 
 function readAddress(source: BackendListing) {
-  const directAddress = readString(source, ["address", "addressLine", "location"]);
+  const directAddress = readString(source, [
+    "address",
+    "fullAddress",
+    "addressLine",
+    "streetAddress",
+    "location"
+  ]);
 
   if (directAddress) {
     return directAddress;
@@ -138,7 +144,14 @@ function readAddress(source: BackendListing) {
   const addressSource = propertyAddress ?? address;
 
   if (!addressSource) {
-    return "Address updating";
+    const flatParts = [
+      readString(source, ["streetAddress", "street"]),
+      readString(source, ["wardName", "ward"]),
+      readString(source, ["districtName", "district"]),
+      readString(source, ["provinceName", "province"])
+    ].filter(Boolean);
+
+    return flatParts.length ? flatParts.join(", ") : "Address updating";
   }
 
   const parts = [

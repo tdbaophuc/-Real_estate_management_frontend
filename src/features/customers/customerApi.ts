@@ -20,6 +20,7 @@ export type CustomerRecord = {
   requirements: CustomerRequirement[];
   source: CustomerSource | string;
   status: CustomerStatus | string;
+  tags: CustomerTag[];
   userId: number | null;
 };
 
@@ -27,6 +28,7 @@ export type CustomerNote = {
   content: string;
   createdAt: string;
   id: number | string;
+  pinned: boolean;
 };
 
 export type CustomerRequirement = {
@@ -47,6 +49,11 @@ export type CustomerTimelineItem = {
   timestamp: string;
   title: string;
   type: string;
+};
+
+export type CustomerTag = {
+  id: number | string;
+  name: string;
 };
 
 export type CustomerUpsertRequest = {
@@ -187,6 +194,7 @@ function normalizeCustomer(source: BackendRecord): CustomerRecord {
     requirements: readRecordArray(source, ["requirements", "customerRequirements"]).map(normalizeRequirement),
     source: readString(source, ["source"], "MANUAL"),
     status: readString(source, ["status"], "ACTIVE"),
+    tags: readRecordArray(source, ["tags", "customerTags"]).map(normalizeTag),
     userId: readNumber(source, ["userId"])
   };
 }
@@ -195,7 +203,15 @@ function normalizeNote(source: BackendRecord, index = 0): CustomerNote {
   return {
     content: readString(source, ["content", "note", "notes", "message"], "Note details are updating"),
     createdAt: readString(source, ["createdAt", "timestamp", "date"]),
-    id: readNumber(source, ["id", "noteId"]) ?? readString(source, ["id", "noteId"], String(index))
+    id: readNumber(source, ["id", "noteId"]) ?? readString(source, ["id", "noteId"], String(index)),
+    pinned: Boolean(source.pinned)
+  };
+}
+
+function normalizeTag(source: BackendRecord, index = 0): CustomerTag {
+  return {
+    id: readNumber(source, ["id", "tagId"]) ?? readString(source, ["id", "tagId"], String(index)),
+    name: readString(source, ["name", "tag", "label"], "Tag")
   };
 }
 
@@ -270,9 +286,37 @@ export function updateCustomer(customerId: number | string, request: CustomerUps
     .then(normalizeCustomer);
 }
 
+export function deleteCustomer(customerId: number | string) {
+  return apiClient.delete<void>(`/customers/${encodeURIComponent(String(customerId))}`);
+}
+
 export function addCustomerNote(customerId: number | string, content: string) {
   return apiClient
     .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/notes`, { content })
+    .then(normalizeNote);
+}
+
+export function updateCustomerNote(customerId: number | string, noteId: number | string, content: string, pinned?: boolean) {
+  return apiClient
+    .put<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}`,
+      { content, pinned }
+    )
+    .then(normalizeNote);
+}
+
+export function deleteCustomerNote(customerId: number | string, noteId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}`
+  );
+}
+
+export function pinCustomerNote(customerId: number | string, noteId: number | string, pinned: boolean) {
+  return apiClient
+    .patch<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}/pin`,
+      { pinned }
+    )
     .then(normalizeNote);
 }
 
@@ -280,6 +324,43 @@ export function addCustomerRequirement(customerId: number | string, request: Par
   return apiClient
     .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/requirements`, request)
     .then(normalizeRequirement);
+}
+
+export function updateCustomerRequirement(
+  customerId: number | string,
+  requirementId: number | string,
+  request: Partial<CustomerRequirement>
+) {
+  return apiClient
+    .put<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/requirements/${encodeURIComponent(String(requirementId))}`,
+      request
+    )
+    .then(normalizeRequirement);
+}
+
+export function deleteCustomerRequirement(customerId: number | string, requirementId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/requirements/${encodeURIComponent(String(requirementId))}`
+  );
+}
+
+export function getCustomerTags(customerId: number | string) {
+  return apiClient
+    .get<BackendRecord[]>(`/customers/${encodeURIComponent(String(customerId))}/tags`)
+    .then((items) => items.map(normalizeTag));
+}
+
+export function addCustomerTag(customerId: number | string, name: string) {
+  return apiClient
+    .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/tags`, { name })
+    .then(normalizeTag);
+}
+
+export function deleteCustomerTag(customerId: number | string, tagId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/tags/${encodeURIComponent(String(tagId))}`
+  );
 }
 
 export function getCustomerTimeline(customerId: number | string) {

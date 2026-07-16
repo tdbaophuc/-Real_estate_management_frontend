@@ -63,7 +63,7 @@ function normalizeFileResource(source: BackendRecord): FileResource {
     storageKey: readString(source, ["storageKey"]) || undefined,
     storageProvider: readString(source, ["storageProvider"]) || undefined,
     uploadedAt: readString(source, ["uploadedAt", "createdAt"]) || undefined,
-    uploaderId: readNumber(source, ["uploaderId"])
+    uploaderId: readNumber(source, ["uploaderId", "uploadedById"])
   };
 }
 
@@ -75,7 +75,7 @@ function createApiUrl(path: string) {
 
 export function uploadFile(file: File, accessLevel: FileAccessLevel = "PRIVATE") {
   return apiClient
-    .upload<BackendRecord>("/files/upload", { accessLevel, file })
+    .upload<BackendRecord>("/files/upload", { file }, { query: { accessLevel } })
     .then(normalizeFileResource);
 }
 

@@ -212,7 +212,7 @@ export function ListingsPage() {
                     </span>
                   </div>
                   <Button asChild variant="secondary" size="sm">
-                    <Link to={`/listings/${listing.id}/edit`}>{tx("Edit")}</Link>
+                    <Link to={`/listings/${listing.id}`}>{tx("View detail")}</Link>
                   </Button>
                 </article>
               ))

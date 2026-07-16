@@ -65,6 +65,18 @@ export type LeadSearchParams = {
   status?: string;
 };
 
+export type LeadCreateRequest = {
+  assignedAgentId?: number;
+  customerId?: number;
+  email?: string;
+  fullName: string;
+  listingId?: number;
+  message?: string;
+  phone?: string;
+  priority?: LeadPriority | string;
+  sourceCode?: string;
+};
+
 export type LeadScore = {
   priority: string;
   reasons: string[];
@@ -197,6 +209,10 @@ export function searchLeads(params: LeadSearchParams) {
   return apiClient
     .get<PaginatedResponse<BackendRecord>>("/leads", { query: toQueryParams(params) })
     .then((response) => ({ ...response, content: response.content.map(normalizeLead) }));
+}
+
+export function createLead(request: LeadCreateRequest) {
+  return apiClient.post<BackendRecord>("/leads", request).then(normalizeLeadDetail);
 }
 
 export function getLead(leadId: number | string) {

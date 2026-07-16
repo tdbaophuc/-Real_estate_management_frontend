@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Bot, FileText, Plus, Sparkles } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Bot, FileText, Pin, Plus, Sparkles, Trash2 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
+import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
@@ -13,10 +14,17 @@ import { CustomerForm, toCustomerRequest, type CustomerFormValues } from "./Cust
 import {
   addCustomerNote,
   addCustomerRequirement,
+  addCustomerTag,
+  deleteCustomer,
+  deleteCustomerNote,
+  deleteCustomerRequirement,
+  deleteCustomerTag,
   getCustomer,
   getCustomerAiSummary,
   getCustomerRecommendations,
+  getCustomerTags,
   getCustomerTimeline,
+  pinCustomerNote,
   updateCustomer,
   type CustomerPurpose,
   type CustomerRecommendationRequest
@@ -58,8 +66,11 @@ function toNumber(value: string) {
 
 export function CustomerDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [note, setNote] = useState("");
+  const [tagName, setTagName] = useState("");
+  const [isDeleteCustomerOpen, setIsDeleteCustomerOpen] = useState(false);
   const [requirementSummary, setRequirementSummary] = useState("");
   const [requirementPurpose, setRequirementPurpose] = useState<CustomerPurpose | "">("");
   const [requirementLocation, setRequirementLocation] = useState("");
@@ -80,6 +91,19 @@ export function CustomerDetailPage() {
     queryKey: ["customer", id, "timeline"],
     retry: 1
   });
+  const tagsQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => getCustomerTags(id ?? ""),
+    queryKey: ["customer", id, "tags"],
+    retry: 1
+  });
+  const invalidateCustomerData = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["customer", id] }),
+      queryClient.invalidateQueries({ queryKey: ["customer", id, "timeline"] }),
+      queryClient.invalidateQueries({ queryKey: ["customer", id, "tags"] }),
+      queryClient.invalidateQueries({ queryKey: ["customers"] })
+    ]);
   const summaryQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getCustomerAiSummary(id ?? ""),
@@ -93,13 +117,28 @@ export function CustomerDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["customers"] });
     }
   });
+  const deleteCustomerMutation = useMutation({
+    mutationFn: () => deleteCustomer(id ?? ""),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["customers"] });
+      navigate("/customers", { replace: true });
+    }
+  });
   const noteMutation = useMutation({
     mutationFn: () => addCustomerNote(id ?? "", note.trim()),
     onSuccess: () => {
       setNote("");
-      void queryClient.invalidateQueries({ queryKey: ["customer", id] });
-      void queryClient.invalidateQueries({ queryKey: ["customer", id, "timeline"] });
+      return invalidateCustomerData();
     }
+  });
+  const pinNoteMutation = useMutation({
+    mutationFn: ({ noteId, pinned }: { noteId: number | string; pinned: boolean }) =>
+      pinCustomerNote(id ?? "", noteId, pinned),
+    onSuccess: invalidateCustomerData
+  });
+  const deleteNoteMutation = useMutation({
+    mutationFn: (noteId: number | string) => deleteCustomerNote(id ?? "", noteId),
+    onSuccess: invalidateCustomerData
   });
   const requirementMutation = useMutation({
     mutationFn: () =>
@@ -115,9 +154,23 @@ export function CustomerDetailPage() {
       setRequirementPurpose("");
       setRequirementLocation("");
       setRequirementMaxPrice("");
-      void queryClient.invalidateQueries({ queryKey: ["customer", id] });
-      void queryClient.invalidateQueries({ queryKey: ["customer", id, "timeline"] });
+      return invalidateCustomerData();
     }
+  });
+  const deleteRequirementMutation = useMutation({
+    mutationFn: (requirementId: number | string) => deleteCustomerRequirement(id ?? "", requirementId),
+    onSuccess: invalidateCustomerData
+  });
+  const addTagMutation = useMutation({
+    mutationFn: () => addCustomerTag(id ?? "", tagName.trim()),
+    onSuccess: () => {
+      setTagName("");
+      return invalidateCustomerData();
+    }
+  });
+  const deleteTagMutation = useMutation({
+    mutationFn: (tagId: number | string) => deleteCustomerTag(id ?? "", tagId),
+    onSuccess: invalidateCustomerData
   });
   const recommendationsMutation = useMutation({
     mutationFn: () => {
@@ -147,6 +200,17 @@ export function CustomerDetailPage() {
   const recommendationError = recommendationsMutation.error
     ? normalizeUnknownError(recommendationsMutation.error)
     : null;
+  const actionError =
+    updateMutation.error ??
+    deleteCustomerMutation.error ??
+    noteMutation.error ??
+    pinNoteMutation.error ??
+    deleteNoteMutation.error ??
+    requirementMutation.error ??
+    deleteRequirementMutation.error ??
+    addTagMutation.error ??
+    deleteTagMutation.error;
+  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
 
   if (!id) {
     return (
@@ -203,6 +267,14 @@ export function CustomerDetailPage() {
     recommendationsMutation.mutate();
   }
 
+  function submitTag(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (tagName.trim()) {
+      addTagMutation.mutate();
+    }
+  }
+
   return (
     <section>
       <Button asChild variant="ghost" size="sm">
@@ -220,7 +292,12 @@ export function CustomerDetailPage() {
           <h1>{customer.fullName}</h1>
           <p className="muted">{customer.code} / {customer.source} / {customer.preferredContactMethod}</p>
         </div>
+        <Button variant="danger" size="sm" onClick={() => setIsDeleteCustomerOpen(true)} disabled={deleteCustomerMutation.isPending}>
+          <Trash2 size={16} />
+          Delete customer
+        </Button>
       </div>
+      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
       <div className="customer-crm-grid">
         <section className="content-section customer-profile-card">
           <p className="eyebrow">Profile</p>
@@ -229,6 +306,26 @@ export function CustomerDetailPage() {
           <div><span>User id</span><strong>{customer.userId ?? "Not linked"}</strong></div>
           <div><span>Assigned agent</span><strong>{customer.assignedAgentId ?? "Unassigned"}</strong></div>
           {customer.notes ? <p className="muted">{customer.notes}</p> : null}
+        </section>
+        <section className="content-section customer-profile-card">
+          <p className="eyebrow">Tags</p>
+          <form className="customer-inline-form" onSubmit={submitTag}>
+            <Input label="Tag name" value={tagName} onChange={(event) => setTagName(event.target.value)} />
+            <Button type="submit" disabled={!tagName.trim() || addTagMutation.isPending}>
+              <Plus size={16} />
+              Add tag
+            </Button>
+          </form>
+          <div className="detail-badges">
+            {(tagsQuery.data ?? customer.tags).length ? (tagsQuery.data ?? customer.tags).map((tag) => (
+              <span className="status-badge status-info" key={tag.id}>
+                {tag.name}
+                <button className="tag-remove-button" type="button" onClick={() => deleteTagMutation.mutate(tag.id)} aria-label={`Remove ${tag.name}`}>
+                  ×
+                </button>
+              </span>
+            )) : <p className="muted">No tags yet.</p>}
+          </div>
         </section>
         <section className="content-section ai-customer-card">
           <div className="section-header">
@@ -287,6 +384,19 @@ export function CustomerDetailPage() {
           <div className="customer-list-stack">
             {customer.noteItems.length ? customer.noteItems.map((item) => (
               <article key={item.id}>
+                <div className="section-header compact">
+                  <StatusBadge tone={item.pinned ? "info" : "neutral"}>{item.pinned ? "Pinned" : "Note"}</StatusBadge>
+                  <div className="task-action-row">
+                    <Button size="sm" variant="secondary" onClick={() => pinNoteMutation.mutate({ noteId: item.id, pinned: !item.pinned })}>
+                      <Pin size={16} />
+                      {item.pinned ? "Unpin" : "Pin"}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => deleteNoteMutation.mutate(item.id)}>
+                      <Trash2 size={16} />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
                 <strong>{item.content}</strong>
                 {item.createdAt ? <small>{item.createdAt}</small> : null}
               </article>
@@ -318,6 +428,10 @@ export function CustomerDetailPage() {
                 <small>
                   {requirement.maxPrice ? `Up to ${formatCurrency(requirement.maxPrice, requirement.currency)}` : "Budget updating"}
                 </small>
+                <Button size="sm" variant="danger" onClick={() => deleteRequirementMutation.mutate(requirement.id)}>
+                  <Trash2 size={16} />
+                  Delete requirement
+                </Button>
               </article>
             )) : <p className="muted">No requirements recorded.</p>}
           </div>
@@ -380,6 +494,13 @@ export function CustomerDetailPage() {
           )) : <p className="muted">No timeline activity yet.</p>}
         </div>
       </section>
+      <ConfirmDialog
+        open={isDeleteCustomerOpen}
+        title="Delete customer"
+        description={`Delete customer ${customer.code}? This cannot be undone.`}
+        onCancel={() => setIsDeleteCustomerOpen(false)}
+        onConfirm={() => deleteCustomerMutation.mutate()}
+      />
     </section>
   );
 }

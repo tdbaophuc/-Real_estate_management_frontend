@@ -1,21 +1,27 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Clock, MessageSquare, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, ClipboardCheck, MessageSquare, RotateCcw, Users, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { ActionBar } from "../../shared/ui/ActionBar";
 import { Button } from "../../shared/ui/Button";
+import { DetailGrid } from "../../shared/ui/DetailGrid";
 import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
+import { PageHeader } from "../../shared/ui/PageHeader";
+import { SectionCard } from "../../shared/ui/SectionCard";
+import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { Timeline, type TimelineItem } from "../../shared/ui/Timeline";
 import {
   addViewingFeedback,
   cancelAppointment,
   completeAppointment,
   confirmAppointment,
   getAppointment,
-  searchAppointments,
-  rescheduleAppointment
+  rescheduleAppointment,
+  searchAppointments
 } from "./appointmentApi";
 import {
   formatAppointmentDateTime,
@@ -35,7 +41,61 @@ function statusTone(status: string) {
     return "danger";
   }
 
-  return "warning";
+  if (status === "PENDING" || status === "RESCHEDULED") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function canConfirm(status: string) {
+  return status === "PENDING" || status === "RESCHEDULED";
+}
+
+function canCancel(status: string) {
+  return status !== "CANCELLED" && status !== "COMPLETED";
+}
+
+function canComplete(status: string) {
+  return status === "CONFIRMED";
+}
+
+function lifecycleTimeline(appointment: NonNullable<Awaited<ReturnType<typeof getAppointment>>>) {
+  const items: TimelineItem[] = [];
+
+  if (appointment.createdAt) {
+    items.push({
+      description: appointment.createdByName ? `Created by ${appointment.createdByName}` : "Appointment created",
+      meta: formatAppointmentDateTime(appointment.createdAt),
+      title: "Created"
+    });
+  }
+
+  if (appointment.rescheduledFromId) {
+    items.push({
+      description: `Rescheduled from appointment #${appointment.rescheduledFromId}`,
+      meta: appointment.updatedAt ? formatAppointmentDateTime(appointment.updatedAt) : undefined,
+      title: "Rescheduled"
+    });
+  }
+
+  if (appointment.confirmedAt) {
+    items.push({ description: "Viewing confirmed", meta: formatAppointmentDateTime(appointment.confirmedAt), title: "Confirmed" });
+  }
+
+  if (appointment.cancelledAt) {
+    items.push({
+      description: appointment.cancellationReason || "Appointment cancelled",
+      meta: formatAppointmentDateTime(appointment.cancelledAt),
+      title: "Cancelled"
+    });
+  }
+
+  if (appointment.completedAt) {
+    items.push({ description: "Viewing completed", meta: formatAppointmentDateTime(appointment.completedAt), title: "Completed" });
+  }
+
+  return items;
 }
 
 export function AppointmentDetailPage() {
@@ -45,8 +105,14 @@ export function AppointmentDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [rescheduleStart, setRescheduleStart] = useState("");
   const [rescheduleEnd, setRescheduleEnd] = useState("");
-  const [feedback, setFeedback] = useState("");
+  const [rescheduleLocation, setRescheduleLocation] = useState("");
+  const [rescheduleNotes, setRescheduleNotes] = useState("");
   const [rating, setRating] = useState("");
+  const [interestLevel, setInterestLevel] = useState("MEDIUM");
+  const [comments, setComments] = useState("");
+  const [positivePoints, setPositivePoints] = useState("");
+  const [concerns, setConcerns] = useState("");
+  const [nextAction, setNextAction] = useState("");
   const appointmentQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getAppointment(id ?? ""),
@@ -54,8 +120,8 @@ export function AppointmentDetailPage() {
     retry: 1
   });
   const loadedAppointmentsQuery = useQuery({
-    queryFn: () => searchAppointments({ page: 0, size: 100 }),
-    queryKey: ["appointments", "calendar"],
+    queryFn: () => searchAppointments({ page: 0, size: 100, sortBy: "startAt" }),
+    queryKey: ["appointments", "calendar", "detail-conflicts"],
     retry: 1
   });
   const invalidateAppointmentData = () =>
@@ -64,51 +130,61 @@ export function AppointmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["appointments"] }),
       queryClient.invalidateQueries({ queryKey: ["appointments-my"] })
     ]);
-  const confirmMutation = useMutation({
-    mutationFn: () => confirmAppointment(id ?? ""),
-    onSuccess: () => {
-      setPendingAction(null);
-      return invalidateAppointmentData();
-    }
-  });
-  const cancelMutation = useMutation({
-    mutationFn: () => cancelAppointment(id ?? "", cancelReason.trim()),
+  const actionMutation = useMutation({
+    mutationFn: async () => {
+      if (!id || !pendingAction) {
+        throw new Error("Missing appointment action");
+      }
+
+      if (pendingAction === "confirm") {
+        return confirmAppointment(id);
+      }
+
+      if (pendingAction === "cancel") {
+        return cancelAppointment(id, cancelReason.trim());
+      }
+
+      if (pendingAction === "complete") {
+        return completeAppointment(id);
+      }
+
+      return rescheduleAppointment(id, {
+        endAt: toIsoDateTime(rescheduleEnd),
+        meetingLocation: rescheduleLocation || undefined,
+        notes: rescheduleNotes || undefined,
+        startAt: toIsoDateTime(rescheduleStart),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+    },
     onSuccess: () => {
       setPendingAction(null);
       setCancelReason("");
       return invalidateAppointmentData();
     }
   });
-  const rescheduleMutation = useMutation({
-    mutationFn: () => rescheduleAppointment(id ?? "", toIsoDateTime(rescheduleStart), toIsoDateTime(rescheduleEnd)),
-    onSuccess: () => {
-      setPendingAction(null);
-      return invalidateAppointmentData();
-    }
-  });
-  const completeMutation = useMutation({
-    mutationFn: () => completeAppointment(id ?? ""),
-    onSuccess: () => {
-      setPendingAction(null);
-      return invalidateAppointmentData();
-    }
-  });
   const feedbackMutation = useMutation({
-    mutationFn: () => addViewingFeedback(id ?? "", { feedback: feedback.trim(), rating: rating ? Number(rating) : undefined }),
+    mutationFn: () =>
+      addViewingFeedback(id ?? "", {
+        comments: comments.trim(),
+        concerns: concerns || undefined,
+        interestLevel,
+        nextAction: nextAction || undefined,
+        positivePoints: positivePoints || undefined,
+        rating: rating ? Number(rating) : undefined
+      }),
     onSuccess: () => {
-      setFeedback("");
       setRating("");
+      setInterestLevel("MEDIUM");
+      setComments("");
+      setPositivePoints("");
+      setConcerns("");
+      setNextAction("");
       return invalidateAppointmentData();
     }
   });
   const appointment = appointmentQuery.data;
   const normalizedError = appointmentQuery.error ? normalizeUnknownError(appointmentQuery.error) : null;
-  const actionError =
-    confirmMutation.error ??
-    cancelMutation.error ??
-    rescheduleMutation.error ??
-    completeMutation.error ??
-    feedbackMutation.error;
+  const actionError = actionMutation.error ?? feedbackMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const hasRescheduleConflict = hasAppointmentConflict(
     loadedAppointmentsQuery.data?.content ?? [],
@@ -116,6 +192,7 @@ export function AppointmentDetailPage() {
     rescheduleEnd ? toIsoDateTime(rescheduleEnd) : "",
     id
   );
+  const timelineItems = useMemo(() => (appointment ? lifecycleTimeline(appointment) : []), [appointment]);
 
   if (!id) {
     return (
@@ -146,117 +223,196 @@ export function AppointmentDetailPage() {
     return null;
   }
 
-  function openReschedule() {
+  function openAction(action: PendingAction) {
     if (!appointment) {
       return;
     }
 
-    setRescheduleStart(toLocalInputValue(appointment.startTime));
-    setRescheduleEnd(toLocalInputValue(appointment.endTime));
-    setPendingAction("reschedule");
+    setPendingAction(action);
+    setCancelReason("");
+
+    if (action === "reschedule") {
+      setRescheduleStart(toLocalInputValue(appointment.startAt));
+      setRescheduleEnd(toLocalInputValue(appointment.endAt));
+      setRescheduleLocation(appointment.meetingLocation);
+      setRescheduleNotes(appointment.notes);
+    }
   }
 
-  function confirmAction() {
-    if (pendingAction === "confirm") {
-      confirmMutation.mutate();
-    }
-
-    if (pendingAction === "cancel") {
-      cancelMutation.mutate();
-    }
-
-    if (pendingAction === "reschedule") {
-      rescheduleMutation.mutate();
-    }
-
-    if (pendingAction === "complete") {
-      completeMutation.mutate();
+  function submitAction() {
+    if (pendingAction) {
+      actionMutation.mutate();
     }
   }
 
   function submitFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (feedback.trim()) {
+    if (comments.trim()) {
       feedbackMutation.mutate();
     }
   }
 
   return (
-    <section>
+    <section className="appointment-detail-workspace">
       <Button asChild variant="ghost" size="sm">
         <Link to="/appointments">
           <ArrowLeft size={16} />
           Back to appointments
         </Link>
       </Button>
-      <div className="detail-header">
-        <div>
-          <div className="detail-badges">
+      <PageHeader
+        eyebrow="Appointment Detail & Feedback"
+        title={appointment.title}
+        description={appointment.meetingLocation || appointment.propertyName}
+        meta={(
+          <>
             <StatusBadge tone={statusTone(appointment.status)}>{appointment.status}</StatusBadge>
-          </div>
-          <h1>{appointment.title}</h1>
-          <p className="muted">{appointment.location || "Location updating"}</p>
-        </div>
-      </div>
-      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
-      <div className="appointment-detail-grid">
-        <section className="content-section appointment-profile-card">
-          <p className="eyebrow">Schedule</p>
-          <div><span>Start</span><strong>{formatAppointmentDateTime(appointment.startTime)}</strong></div>
-          <div><span>End</span><strong>{formatAppointmentDateTime(appointment.endTime)}</strong></div>
-          <div><span>Agent</span><strong>{appointment.agentId ?? "Unassigned"}</strong></div>
-          <div><span>Customer</span><strong>{appointment.customerId ?? "Not linked"}</strong></div>
-          <div><span>Lead</span><strong>{appointment.leadId ?? "Not linked"}</strong></div>
-          <div><span>Property</span><strong>{appointment.propertyId ?? "Not linked"}</strong></div>
-          {appointment.notes ? <p className="muted">{appointment.notes}</p> : null}
-        </section>
-        <section className="content-section">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Workflow</p>
-              <h2>Appointment actions</h2>
-            </div>
-            <Clock size={20} />
-          </div>
-          <div className="appointment-action-grid">
-            <Button variant="secondary" disabled={appointment.status !== "PENDING"} onClick={() => setPendingAction("confirm")}>
+            {appointment.code ? <span className="muted">#{appointment.code}</span> : null}
+          </>
+        )}
+        actions={(
+          <>
+            <Button variant="secondary" disabled={!canConfirm(appointment.status)} onClick={() => openAction("confirm")}>
               <CheckCircle2 size={16} />
               Confirm
             </Button>
-            <Button variant="secondary" disabled={appointment.status === "CANCELLED" || appointment.status === "COMPLETED"} onClick={openReschedule}>
+            <Button variant="secondary" disabled={!canCancel(appointment.status)} onClick={() => openAction("reschedule")}>
+              <RotateCcw size={16} />
               Reschedule
             </Button>
-            <Button variant="secondary" disabled={appointment.status !== "CONFIRMED"} onClick={() => setPendingAction("complete")}>
+            <Button variant="secondary" disabled={!canComplete(appointment.status)} onClick={() => openAction("complete")}>
+              <ClipboardCheck size={16} />
               Complete
             </Button>
-            <Button variant="danger" disabled={appointment.status === "CANCELLED" || appointment.status === "COMPLETED"} onClick={() => setPendingAction("cancel")}>
+            <Button variant="danger" disabled={!canCancel(appointment.status)} onClick={() => openAction("cancel")}>
               <XCircle size={16} />
               Cancel
             </Button>
+          </>
+        )}
+      />
+      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
+      <div className="appointment-detail-layout">
+        <div className="appointment-detail-main">
+          <SectionCard title="Schedule" description="Viewing time, property and source links." actions={<CalendarClock size={20} />}>
+            <DetailGrid
+              items={[
+                { label: "Start", value: formatAppointmentDateTime(appointment.startAt) },
+                { label: "End", value: formatAppointmentDateTime(appointment.endAt) },
+                { label: "Timezone", value: appointment.timezone },
+                { label: "Location", value: appointment.meetingLocation || "Location updating" },
+                { label: "Property", value: appointment.propertyName || appointment.propertyId || "Not linked" },
+                { label: "Listing", value: appointment.listingTitle || appointment.listingId || "Not linked" },
+                { label: "Lead", value: appointment.leadCode || appointment.leadId || "Not linked" },
+                { label: "Created by", value: appointment.createdByName || appointment.createdById || "Unknown" }
+              ]}
+            />
+            {appointment.notes ? <p className="muted">{appointment.notes}</p> : null}
+          </SectionCard>
+          <SectionCard title="Location" description={appointment.meetingLocation || "Service location updates when the appointment is linked to a property."}>
+            <div className="appointment-location-map">
+              <span />
+              <strong>{appointment.meetingLocation || appointment.propertyName}</strong>
+            </div>
+          </SectionCard>
+          <div className="appointment-detail-grid">
+            <SectionCard title="Status lifecycle" description="Confirmation, cancellation, reschedule and completion history.">
+              <Timeline items={timelineItems} emptyMessage="No lifecycle activity yet" />
+            </SectionCard>
+            <SectionCard title="Cancellation and reschedule data" description="Operational data from the current appointment record.">
+              <DetailGrid
+                items={[
+                  { label: "Rescheduled from", value: appointment.rescheduledFromId || "Original appointment" },
+                  { label: "Cancellation reason", value: appointment.cancellationReason || "None" },
+                  { label: "Cancelled by", value: appointment.cancelledById || "None" },
+                  { label: "Cancelled at", value: appointment.cancelledAt ? formatAppointmentDateTime(appointment.cancelledAt) : "None" },
+                  { label: "Confirmed at", value: appointment.confirmedAt ? formatAppointmentDateTime(appointment.confirmedAt) : "Pending" },
+                  { label: "Completed at", value: appointment.completedAt ? formatAppointmentDateTime(appointment.completedAt) : "Pending" }
+                ]}
+              />
+            </SectionCard>
           </div>
-        </section>
-      </div>
-      <section className="content-section">
-        <div className="section-header">
-          <div>
-            <p className="eyebrow">Feedback</p>
-            <h2>Viewing feedback</h2>
-          </div>
-          <MessageSquare size={20} />
         </div>
-        <form className="appointment-feedback-form" onSubmit={submitFeedback}>
-          <Input label="Rating" value={rating} onChange={(event) => setRating(event.target.value)} placeholder="1-5" />
-          <textarea className="input textarea" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="Buyer reaction, next steps, objections" />
-          <Button type="submit" disabled={!feedback.trim() || feedbackMutation.isPending}>
-            Add feedback
-          </Button>
-        </form>
-      </section>
+        <aside className="appointment-detail-rail">
+          <SectionCard title="Participants" description="Customer, agent and invited participants." actions={<Users size={20} />}>
+            <div className="appointment-participant-summary">
+              <article>
+                <span>Customer</span>
+                <strong>{appointment.customerName}</strong>
+                <small>{appointment.customerId ? `#${appointment.customerId}` : "Not linked"}</small>
+              </article>
+              <article>
+                <span>Agent</span>
+                <strong>{appointment.agentName}</strong>
+                <small>{appointment.agentId ? `#${appointment.agentId}` : "Unassigned"}</small>
+              </article>
+            </div>
+            <div className="appointment-participant-list">
+              {appointment.participants.length ? appointment.participants.map((participant) => (
+                <article key={participant.id}>
+                  <div>
+                    <strong>{participant.userName}</strong>
+                    <small>{participant.participantRole} / {participant.responseStatus}</small>
+                  </div>
+                  {participant.respondedAt ? <span>{formatAppointmentDateTime(participant.respondedAt)}</span> : null}
+                  {participant.notes ? <p>{participant.notes}</p> : null}
+                </article>
+              )) : <p className="timeline-empty">No participants returned by API.</p>}
+            </div>
+          </SectionCard>
+          <SectionCard title="Viewing feedback" description="Capture buyer reaction and next action after completion." actions={<MessageSquare size={20} />}>
+            <form className="appointment-feedback-form" onSubmit={submitFeedback}>
+              <Input label="Rating" value={rating} onChange={(event) => setRating(event.target.value)} placeholder="1-5" />
+              <Select
+                label="Interest"
+                options={[
+                  { label: "High", value: "HIGH" },
+                  { label: "Medium", value: "MEDIUM" },
+                  { label: "Low", value: "LOW" }
+                ]}
+                value={interestLevel}
+                onChange={(event) => setInterestLevel(event.target.value)}
+              />
+              <textarea className="input textarea" value={comments} onChange={(event) => setComments(event.target.value)} placeholder="Buyer reaction and overall comments" />
+              <Input label="Positive points" value={positivePoints} onChange={(event) => setPositivePoints(event.target.value)} />
+              <Input label="Concerns" value={concerns} onChange={(event) => setConcerns(event.target.value)} />
+              <Input label="Next action" value={nextAction} onChange={(event) => setNextAction(event.target.value)} />
+              <Button type="submit" disabled={!comments.trim() || feedbackMutation.isPending}>
+                Add feedback
+              </Button>
+            </form>
+            <div className="appointment-feedback-list">
+              {appointment.feedbacks.length ? appointment.feedbacks.map((item) => (
+                <article key={item.id}>
+                  <header>
+                    <strong>{item.submittedByName}</strong>
+                    <StatusBadge tone={item.interestLevel === "HIGH" ? "success" : item.interestLevel === "LOW" ? "danger" : "warning"}>{item.interestLevel}</StatusBadge>
+                  </header>
+                  <p>{item.comments}</p>
+                  <div className="appointment-feedback-meta">
+                    <span>Rating: {item.rating ?? "N/A"}</span>
+                    {item.positivePoints ? <span>Positive: {item.positivePoints}</span> : null}
+                    {item.concerns ? <span>Concerns: {item.concerns}</span> : null}
+                    {item.nextAction ? <span>Next: {item.nextAction}</span> : null}
+                    {item.createdAt ? <span>{formatAppointmentDateTime(item.createdAt)}</span> : null}
+                  </div>
+                </article>
+              )) : <p className="timeline-empty">No viewing feedback yet.</p>}
+            </div>
+          </SectionCard>
+        </aside>
+      </div>
+      <ActionBar sticky>
+        <Button variant="secondary" disabled={!canConfirm(appointment.status)} onClick={() => openAction("confirm")}>Confirm</Button>
+        <Button variant="secondary" disabled={!canCancel(appointment.status)} onClick={() => openAction("reschedule")}>Reschedule</Button>
+        <Button variant="secondary" disabled={!canComplete(appointment.status)} onClick={() => openAction("complete")}>Complete</Button>
+        <Button variant="danger" disabled={!canCancel(appointment.status)} onClick={() => openAction("cancel")}>Cancel</Button>
+      </ActionBar>
       <Dialog
         open={Boolean(pendingAction)}
         onClose={() => setPendingAction(null)}
-        title="Confirm appointment action"
+        title={pendingAction ? `${pendingAction} appointment` : "Appointment action"}
       >
         <div className="dialog-body">
           <p>Confirm this appointment action?</p>
@@ -267,6 +423,8 @@ export function AppointmentDetailPage() {
             <div className="appointment-reschedule-form">
               <Input label="New start" type="datetime-local" value={rescheduleStart} onChange={(event) => setRescheduleStart(event.target.value)} />
               <Input label="New end" type="datetime-local" value={rescheduleEnd} onChange={(event) => setRescheduleEnd(event.target.value)} />
+              <Input label="Meeting location" value={rescheduleLocation} onChange={(event) => setRescheduleLocation(event.target.value)} />
+              <textarea className="input textarea" value={rescheduleNotes} onChange={(event) => setRescheduleNotes(event.target.value)} placeholder="Reschedule notes" />
               {hasRescheduleConflict ? <p className="form-alert">Conflict warning: this time overlaps with an appointment already loaded in the calendar.</p> : null}
             </div>
           ) : null}
@@ -275,8 +433,9 @@ export function AppointmentDetailPage() {
           <Button variant="secondary" onClick={() => setPendingAction(null)}>Cancel</Button>
           <Button
             variant={pendingAction === "cancel" ? "danger" : "primary"}
-            onClick={confirmAction}
+            onClick={submitAction}
             disabled={
+              actionMutation.isPending ||
               (pendingAction === "cancel" && !cancelReason.trim()) ||
               (pendingAction === "reschedule" && (!rescheduleStart || !rescheduleEnd))
             }

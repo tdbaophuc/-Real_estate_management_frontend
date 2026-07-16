@@ -15,9 +15,13 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   ReceiptText,
   Search,
   ShieldCheck,
+  Sparkles,
+  X,
   UserRound,
   Users
 } from "lucide-react";
@@ -54,6 +58,8 @@ export function AuthenticatedLayout() {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const roles = user?.roles ?? [];
   const visibleItems = navigationItems.filter((item) =>
     canAccessNavigationItem(item, roles)
@@ -65,44 +71,116 @@ export function AuthenticatedLayout() {
     retry: 1
   });
   const unreadCount = unreadQuery.data ?? 0;
-
-  return (
-    <div className={cn("app-layout", isAiAssistantOpen && "app-layout-ai-open")}>
-      <aside className="sidebar">
-        <Link className="brand sidebar-brand" to="/dashboard">
+  const closeMobileNav = () => setIsMobileNavOpen(false);
+  const sidebarNavigation = (
+    <>
+      <div className="sidebar-header">
+        <Link className="brand sidebar-brand" to="/dashboard" onClick={closeMobileNav}>
           <span className="brand-mark">
             <Building2 size={20} />
           </span>
-          <span>RealEstate Pro</span>
+          <span className="brand-copy">
+            <strong>AssetManager</strong>
+            <small>Institutional Estate</small>
+          </span>
         </Link>
-        <nav className="sidebar-nav" aria-label={t("app.title")}>
-          {visibleItems.map((item) => {
-            const Icon = iconMap[item.icon];
-            return (
-              <NavLink key={item.href} to={item.href}>
-                <Icon size={17} />
-                {t(item.labelKey)}
-              </NavLink>
-            );
-          })}
-        </nav>
         <button
-          className="sidebar-ai-toggle"
+          className="sidebar-collapse"
           type="button"
-          aria-pressed={isAiAssistantOpen}
-          onClick={() => setIsAiAssistantOpen((current) => !current)}
+          aria-label={isSidebarCollapsed ? t("Expand sidebar") : t("Collapse sidebar")}
+          onClick={() => setIsSidebarCollapsed((current) => !current)}
         >
-          <Bot size={18} />
-          <span>{t("navigation.aiAssistant")}</span>
+          {isSidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
         </button>
+      </div>
+      <nav className="sidebar-nav" aria-label={t("app.title")}>
+        {visibleItems.map((item) => {
+          const Icon = iconMap[item.icon];
+          return (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              title={t(item.labelKey)}
+              onClick={closeMobileNav}
+            >
+              <Icon size={17} />
+              <span>{t(item.labelKey)}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+      <button
+        className="sidebar-ai-toggle"
+        type="button"
+        aria-pressed={isAiAssistantOpen}
+        onClick={() => {
+          setIsAiAssistantOpen((current) => !current);
+          closeMobileNav();
+        }}
+      >
+        <Bot size={18} />
+        <span>{t("navigation.aiAssistant")}</span>
+      </button>
+    </>
+  );
+
+  return (
+    <div
+      className={cn(
+        "app-layout",
+        isAiAssistantOpen && "app-layout-ai-open",
+        isSidebarCollapsed && "app-layout-sidebar-collapsed"
+      )}
+    >
+      <aside className="sidebar">
+        {sidebarNavigation}
       </aside>
+      {isMobileNavOpen ? (
+        <div className="mobile-nav-layer" role="presentation" onClick={closeMobileNav}>
+          <aside
+            className="mobile-sidebar"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("app.title")}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="mobile-nav-close"
+              type="button"
+              aria-label={t("Close menu")}
+              onClick={closeMobileNav}
+            >
+              <X size={18} />
+            </button>
+            {sidebarNavigation}
+          </aside>
+        </div>
+      ) : null}
       <div className="app-content">
         <header className="app-topbar">
-          <div>
-            <p className="eyebrow">{t("app.workspace")}</p>
-            <h1>{t("app.title")}</h1>
+          <div className="topbar-heading">
+            <button
+              className="mobile-nav-trigger"
+              type="button"
+              aria-label={t("Open menu")}
+              onClick={() => setIsMobileNavOpen(true)}
+            >
+              <Menu size={19} />
+            </button>
+            <div>
+              <p className="eyebrow">{t("app.workspace")}</p>
+              <h1>{t("app.title")}</h1>
+            </div>
           </div>
           <div className="topbar-actions">
+            <Button
+              variant={isAiAssistantOpen ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setIsAiAssistantOpen((current) => !current)}
+            >
+              <Sparkles size={16} />
+              {t("navigation.aiAssistant")}
+            </Button>
             <LanguageSwitcher />
             <Button asChild variant="ghost" size="icon" aria-label={t("app.notifications")}>
               <Link className="notification-button" to="/notifications">

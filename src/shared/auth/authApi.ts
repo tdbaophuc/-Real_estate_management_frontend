@@ -1,4 +1,4 @@
-import { apiClient } from "../api/client";
+import { apiClient, refreshAuthSession } from "../api/client";
 import type { AuthSession, CurrentUser, RoleCode } from "../types/auth";
 
 export type LoginRequest = {
@@ -144,6 +144,7 @@ export const authApi = {
       skipAuth: true,
       skipRefresh: true
     }),
+  refreshToken: (refreshToken: string) => refreshAuthSession(refreshToken),
   revokeAllSessions: () => apiClient.delete<void>("/auth/me/sessions"),
   revokeSession: (sessionId: number | string) =>
     apiClient.delete<void>(`/auth/me/sessions/${encodeURIComponent(String(sessionId))}`),

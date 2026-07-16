@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
@@ -11,7 +11,14 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Table } from "../../shared/ui/Table";
-import { searchLeads, type LeadPipelineStatus, type LeadRecord, type LeadSearchParams } from "./leadApi";
+import {
+  searchLeads,
+  createLead,
+  updateLeadStatus,
+  type LeadPipelineStatus,
+  type LeadRecord,
+  type LeadSearchParams
+} from "./leadApi";
 import { leadStatusKey } from "./leadLabels";
 
 const pageSize = 10;
@@ -105,10 +112,23 @@ function groupLeads(leads: LeadRecord[]) {
 
 export function LeadsPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPage = Number(searchParams.get("page") ?? 0) || 0;
   const committedFilters = useMemo(() => getInitialFilters(searchParams), [searchParams]);
   const [filters, setFilters] = useState<LeadFilters>(committedFilters);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newLead, setNewLead] = useState({
+    assignedAgentId: "",
+    customerId: "",
+    email: "",
+    fullName: "",
+    listingId: "",
+    message: "",
+    phone: "",
+    priority: "MEDIUM",
+    sourceCode: "MANUAL"
+  });
   const apiParams = useMemo(() => toApiParams(committedFilters, currentPage), [committedFilters, currentPage]);
   const leadsQuery = useQuery({
     queryFn: () => searchLeads(apiParams),
@@ -120,7 +140,50 @@ export function LeadsPage() {
     queryKey: ["leads", "board"],
     retry: 1
   });
+  const statusMutation = useMutation({
+    mutationFn: ({ leadId, status }: { leadId: number | string; status: LeadPipelineStatus }) =>
+      updateLeadStatus(leadId, status),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["leads"] }),
+        queryClient.invalidateQueries({ queryKey: ["leads", "board"] })
+      ])
+  });
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createLead({
+        assignedAgentId: newLead.assignedAgentId ? Number(newLead.assignedAgentId) : undefined,
+        customerId: newLead.customerId ? Number(newLead.customerId) : undefined,
+        email: newLead.email || undefined,
+        fullName: newLead.fullName.trim(),
+        listingId: newLead.listingId ? Number(newLead.listingId) : undefined,
+        message: newLead.message || undefined,
+        phone: newLead.phone || undefined,
+        priority: newLead.priority,
+        sourceCode: newLead.sourceCode || undefined
+      }),
+    onSuccess: () => {
+      setIsCreateOpen(false);
+      setNewLead({
+        assignedAgentId: "",
+        customerId: "",
+        email: "",
+        fullName: "",
+        listingId: "",
+        message: "",
+        phone: "",
+        priority: "MEDIUM",
+        sourceCode: "MANUAL"
+      });
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["leads"] }),
+        queryClient.invalidateQueries({ queryKey: ["leads", "board"] })
+      ]);
+    }
+  });
   const normalizedError = leadsQuery.error ? normalizeUnknownError(leadsQuery.error) : null;
+  const actionError = statusMutation.error ?? createMutation.error;
+  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const statusOptions = useMemo(
     () => [
       { label: t("common.anyStatus"), value: "" },
@@ -157,6 +220,18 @@ export function LeadsPage() {
     setSearchParams(buildSearchParams(nextFilters, 0));
   }
 
+  function updateNewLead(field: keyof typeof newLead, value: string) {
+    setNewLead((current) => ({ ...current, [field]: value }));
+  }
+
+  function submitCreateLead(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (newLead.fullName.trim()) {
+      createMutation.mutate();
+    }
+  }
+
   return (
     <section>
       <div className="section-header">
@@ -164,7 +239,28 @@ export function LeadsPage() {
           <p className="eyebrow">{t("leads.leads")}</p>
           <h2>{t("leads.leadPipeline")}</h2>
         </div>
+        <Button type="button" onClick={() => setIsCreateOpen((current) => !current)}>
+          <Plus size={16} />
+          New lead
+        </Button>
       </div>
+      {isCreateOpen ? (
+        <form className="content-section lead-create-form" onSubmit={submitCreateLead}>
+          <Input label="Full name" value={newLead.fullName} onChange={(event) => updateNewLead("fullName", event.target.value)} />
+          <Input label="Email" value={newLead.email} onChange={(event) => updateNewLead("email", event.target.value)} />
+          <Input label="Phone" value={newLead.phone} onChange={(event) => updateNewLead("phone", event.target.value)} />
+          <Input label="Customer id" value={newLead.customerId} onChange={(event) => updateNewLead("customerId", event.target.value)} />
+          <Input label="Listing id" value={newLead.listingId} onChange={(event) => updateNewLead("listingId", event.target.value)} />
+          <Input label="Assigned agent id" value={newLead.assignedAgentId} onChange={(event) => updateNewLead("assignedAgentId", event.target.value)} />
+          <Select label={t("common.priority")} value={newLead.priority} onChange={(event) => updateNewLead("priority", event.target.value)} options={priorityOptions.slice(1)} />
+          <Input label="Source code" value={newLead.sourceCode} onChange={(event) => updateNewLead("sourceCode", event.target.value)} />
+          <textarea className="input textarea" value={newLead.message} onChange={(event) => updateNewLead("message", event.target.value)} placeholder="Message" />
+          <div className="form-actions">
+            <Button type="button" variant="secondary" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={!newLead.fullName.trim() || createMutation.isPending}>Create lead</Button>
+          </div>
+        </form>
+      ) : null}
       <form className="filter-bar lead-filter-bar" onSubmit={submitSearch}>
         <Input
           label={t("common.keyword")}
@@ -194,6 +290,7 @@ export function LeadsPage() {
         {boardQuery.error ? (
           <EmptyState title={t("leads.pipelineBoardUnavailable")} description={normalizeUnknownError(boardQuery.error).message} action={<Button onClick={() => boardQuery.refetch()}>{t("actions.retry")}</Button>} />
         ) : null}
+        {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
         <div className="lead-board">
           {groupLeads(boardQuery.data?.content ?? []).map((column) => (
             <article className="lead-board-column" key={column.status}>
@@ -202,10 +299,24 @@ export function LeadsPage() {
                 <strong>{column.leads.length}</strong>
               </header>
               {column.leads.length ? column.leads.slice(0, 5).map((lead) => (
-                <Link className="lead-board-card" to={`/leads/${lead.id}`} key={lead.id}>
-                  <strong>{lead.fullName}</strong>
-                  <small>{lead.code} / {t(`common.${lead.priority.toLowerCase()}`)}</small>
-                </Link>
+                <article className="lead-board-card" key={lead.id}>
+                  <Link to={`/leads/${lead.id}`}>
+                    <strong>{lead.fullName}</strong>
+                    <small>{lead.code} / {t(`common.${lead.priority.toLowerCase()}`)}</small>
+                  </Link>
+                  <Select
+                    label={t("leads.pipelineStatus")}
+                    value={lead.pipelineStatus}
+                    options={pipelineStatuses.map((status) => ({ label: t(leadStatusKey(status)), value: status }))}
+                    disabled={statusMutation.isPending}
+                    onChange={(event) =>
+                      statusMutation.mutate({
+                        leadId: lead.id,
+                        status: event.target.value as LeadPipelineStatus
+                      })
+                    }
+                  />
+                </article>
               )) : <small className="muted">{t("leads.noLeads")}</small>}
             </article>
           ))}

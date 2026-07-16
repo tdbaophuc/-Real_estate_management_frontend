@@ -121,14 +121,34 @@ function normalizeLeadSource(source: BackendRecord): LeadSourceItem {
   };
 }
 
+function readListPayload(payload: unknown): BackendRecord[] {
+  if (Array.isArray(payload)) {
+    return payload.filter((item): item is BackendRecord => Boolean(item) && typeof item === "object");
+  }
+
+  if (payload && typeof payload === "object") {
+    const record = payload as BackendRecord;
+
+    for (const key of ["content", "items", "data"]) {
+      const value = record[key];
+
+      if (Array.isArray(value)) {
+        return value.filter((item): item is BackendRecord => Boolean(item) && typeof item === "object");
+      }
+    }
+  }
+
+  return [];
+}
+
 function getMasterDataList<T>(
   path: string,
   normalizer: (source: BackendRecord) => T,
   query?: QueryParams
 ) {
   return apiClient
-    .get<BackendRecord[]>(path, { query, skipRefresh: true })
-    .then((items) => (Array.isArray(items) ? items.map(normalizer) : []));
+    .get<unknown>(path, { query })
+    .then((items) => readListPayload(items).map(normalizer));
 }
 
 export function getProvinces() {

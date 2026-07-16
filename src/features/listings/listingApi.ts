@@ -197,7 +197,7 @@ function readPropertySummary(source: BackendRecord | null): ListingPropertySumma
   }
 
   return {
-    address: readString(source, ["address", "fullAddress", "addressLine"]) || undefined,
+    address: readString(source, ["address", "fullAddress", "addressLine", "streetAddress"]) || undefined,
     code: readString(source, ["code"], String(id)),
     id,
     name: readString(source, ["name", "title"], readString(source, ["code"], String(id)))

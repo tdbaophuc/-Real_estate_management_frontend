@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Bath,
@@ -37,6 +37,7 @@ import { formatCurrency } from "../../shared/lib/format";
 import { analyzePropertyImage, type ImageAnalysisSuggestion } from "../ai/aiApi";
 import {
   deletePropertyImage,
+  deleteProperty,
   deletePropertyLegalDocument,
   getProperty,
   getPropertyImages,
@@ -744,10 +745,12 @@ function LegalDocumentsPanel({
 
 export function PropertyDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [nextStatus, setNextStatus] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
+  const [isDeletePropertyOpen, setIsDeletePropertyOpen] = useState(false);
   const propertyQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getProperty(id ?? ""),
@@ -817,13 +820,21 @@ export function PropertyDetailPage() {
       return invalidatePropertyData();
     }
   });
+  const deletePropertyMutation = useMutation({
+    mutationFn: () => deleteProperty(id ?? ""),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["properties"] });
+      navigate("/properties", { replace: true });
+    }
+  });
   const actionError =
     uploadMutation.error ??
     deleteMutation.error ??
     coverMutation.error ??
     metadataMutation.error ??
     reorderMutation.error ??
-    statusMutation.error;
+    statusMutation.error ??
+    deletePropertyMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const imageActionBusy =
     uploadMutation.isPending ||
@@ -899,6 +910,15 @@ export function PropertyDetailPage() {
                   <FilePlus2 size={16} />
                   Create listing
                 </Link>
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setIsDeletePropertyOpen(true)}
+                disabled={deletePropertyMutation.isPending}
+              >
+                <Trash2 size={16} />
+                Delete
               </Button>
             </div>
           </div>
@@ -1014,6 +1034,13 @@ export function PropertyDetailPage() {
         description={`Change status from ${labelStatus(property?.status ?? "")} to ${labelStatus(pendingStatus)}?`}
         onCancel={() => setPendingStatus("")}
         onConfirm={() => statusMutation.mutate(pendingStatus)}
+      />
+      <ConfirmDialog
+        open={isDeletePropertyOpen}
+        title="Delete property"
+        description={`Delete property ${property?.code ?? id}? This cannot be undone.`}
+        onCancel={() => setIsDeletePropertyOpen(false)}
+        onConfirm={() => deletePropertyMutation.mutate()}
       />
     </section>
   );

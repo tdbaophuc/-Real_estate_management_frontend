@@ -410,6 +410,10 @@ export function updateProperty(propertyId: number | string, request: PropertyUps
     .then(normalizeProperty);
 }
 
+export function deleteProperty(propertyId: number | string) {
+  return apiClient.delete<void>(`/properties/${encodeURIComponent(String(propertyId))}`);
+}
+
 export function uploadPropertyImage(
   propertyId: number | string,
   request: PropertyImageUploadRequest

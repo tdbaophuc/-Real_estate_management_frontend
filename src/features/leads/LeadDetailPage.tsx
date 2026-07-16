@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Bot, CalendarClock, CheckCircle2, MessageSquare, Plus, Trash2, UserPlus } from "lucide-react";
@@ -108,7 +108,8 @@ export function LeadDetailPage() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["lead", id] }),
       queryClient.invalidateQueries({ queryKey: ["leads"] }),
-      queryClient.invalidateQueries({ queryKey: ["leads", "board"] })
+      queryClient.invalidateQueries({ queryKey: ["leads", "board"] }),
+      queryClient.invalidateQueries({ queryKey: ["follow-up-tasks"] })
     ]);
   const assignMutation = useMutation({
     mutationFn: () => assignLead(id ?? "", Number(assignedAgentId)),
@@ -175,6 +176,12 @@ export function LeadDetailPage() {
     cancelTaskMutation.error ??
     scoreMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+
+  useEffect(() => {
+    if (lead?.pipelineStatus) {
+      setNextStatus(lead.pipelineStatus as LeadPipelineStatus);
+    }
+  }, [lead?.pipelineStatus]);
 
   if (!id) {
     return (

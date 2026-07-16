@@ -9,10 +9,11 @@ export type ApiResponse<T> = {
   message: string;
   data: T;
   errors?: ApiFieldError[];
+  path?: string;
   timestamp: string;
 };
 
-export type PaginatedResponse<T> = {
+export type PageResponse<T> = {
   content: T[];
   page: number;
   size: number;
@@ -22,11 +23,16 @@ export type PaginatedResponse<T> = {
   last: boolean;
 };
 
+export type PaginatedResponse<T> = PageResponse<T>;
+
 export type NormalizedApiError = {
   code: string;
+  details: string[];
   fieldErrors: Record<string, string>;
   message: string;
+  path?: string;
   status: number;
+  timestamp?: string;
 };
 
 export type QueryValue =
@@ -50,4 +56,3 @@ export type FormDataValue =
   | undefined;
 
 export type FormDataFields = Record<string, FormDataValue | FormDataValue[]>;
-

@@ -170,12 +170,20 @@ export function FollowUpTasksPage() {
       updateFollowUpTaskStatus(taskId, { completedAt: new Date().toISOString(), status: "COMPLETED" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["follow-up-tasks"] })
   });
+  const statusMutation = useMutation({
+    mutationFn: ({ status, taskId }: { status: string; taskId: number | string }) =>
+      updateFollowUpTaskStatus(taskId, {
+        completedAt: status === "COMPLETED" ? new Date().toISOString() : undefined,
+        status
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["follow-up-tasks"] })
+  });
   const cancelMutation = useMutation({
     mutationFn: cancelFollowUpTask,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["follow-up-tasks"] })
   });
   const normalizedError = tasksQuery.error ? normalizeUnknownError(tasksQuery.error) : null;
-  const actionError = updateMutation.error ?? completeMutation.error ?? cancelMutation.error;
+  const actionError = updateMutation.error ?? completeMutation.error ?? statusMutation.error ?? cancelMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
 
   useEffect(() => {
@@ -282,6 +290,18 @@ export function FollowUpTasksPage() {
                             <Edit size={16} />
                             {tx("Edit")}
                           </Button>
+                          <Select
+                            label={tx("Status")}
+                            value={task.status}
+                            options={statusOptions.filter((option) => option.value)}
+                            disabled={statusMutation.isPending}
+                            onChange={(event) =>
+                              statusMutation.mutate({
+                                status: event.target.value,
+                                taskId: task.id
+                              })
+                            }
+                          />
                           <Button size="sm" variant="secondary" disabled={completeMutation.isPending || task.status === "COMPLETED"} onClick={() => completeMutation.mutate(task.id)}>
                             <CheckCircle2 size={16} />
                             {tx("Complete")}
