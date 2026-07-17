@@ -16,17 +16,22 @@ export type LeadActivityType = "ASSIGNMENT" | "CALL" | "CHAT" | "EMAIL" | "MEETI
 
 export type LeadRecord = {
   assignedAgentId: number | null;
+  assignedAgentName: string;
   code: string;
   customerId: number | null;
+  customerName: string;
   email: string;
   fullName: string;
   id: number | string;
   listingId: number | null;
+  listingTitle: string;
   message: string;
   phone: string;
   pipelineStatus: LeadPipelineStatus | string;
   priority: LeadPriority | string;
+  score: number | null;
   sourceCode: string;
+  sourceName: string;
 };
 
 export type LeadNote = {
@@ -131,17 +136,22 @@ function normalizeLead(source: BackendRecord): LeadRecord {
 
   return {
     assignedAgentId: readNumber(source, ["assignedAgentId", "agentId"]),
+    assignedAgentName: readString(source, ["assignedAgentName", "agentName", "assigneeName"]),
     code: readString(source, ["code"], String(id || "LEAD")),
     customerId: readNumber(source, ["customerId"]),
+    customerName: readString(source, ["customerName"]),
     email: readString(source, ["email"]),
     fullName: readString(source, ["fullName", "name"], "Unnamed lead"),
     id: id || readString(source, ["code", "email", "phone"]),
     listingId: readNumber(source, ["listingId"]),
+    listingTitle: readString(source, ["listingTitle", "listingName"]),
     message: readString(source, ["message", "notes", "description"]),
     phone: readString(source, ["phone", "phoneNumber"]),
     pipelineStatus: readString(source, ["pipelineStatus", "status"], "NEW"),
     priority: readString(source, ["priority"], "MEDIUM"),
-    sourceCode: readString(source, ["sourceCode", "source"], "MANUAL")
+    score: readNumber(source, ["score", "leadScore"]),
+    sourceCode: readString(source, ["sourceCode", "source"], "MANUAL"),
+    sourceName: readString(source, ["sourceName"])
   };
 }
 
