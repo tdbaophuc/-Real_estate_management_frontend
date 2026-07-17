@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, List, Plus, RotateCcw, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, List, Mail, Plus, RotateCcw, Star, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { ActionBar } from "../../shared/ui/ActionBar";
 import { Button } from "../../shared/ui/Button";
@@ -27,7 +27,6 @@ import {
 } from "./appointmentApi";
 import {
   addDays,
-  formatAppointmentDate,
   formatAppointmentDateTime,
   formatAppointmentTime,
   fromDateInputValue,
@@ -44,10 +43,10 @@ import {
 } from "./appointmentTime";
 
 const pageSize = 10;
-const defaultCalendarStartHour = 10;
+const defaultCalendarStartHour = 6;
 const defaultCalendarEndHour = 18;
-const calendarSlotMinutes = 30;
-const calendarSlotHeight = 28;
+const calendarSlotMinutes = 60;
+const calendarSlotHeight = 56;
 
 const statusOptions = [
   { label: "Any status", value: "" },
@@ -86,19 +85,87 @@ function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
 }
 
-function shiftCalendarDate(value: string, days: number) {
-  return toDateInputValue(addDays(fromDateInputValue(value), days));
+type CalendarMode = "day" | "month" | "week";
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
 }
 
-function getCalendarRange(mode: "day" | "week", anchorDate: string) {
-  const anchor = fromDateInputValue(anchorDate);
-  return mode === "week" ? toWeekBoundsIso(anchor) : toDayBoundsIso(anchor);
+function shiftCalendarDate(value: string, mode: CalendarMode, direction: -1 | 1) {
+  const date = fromDateInputValue(value);
+
+  if (mode === "month") {
+    return toDateInputValue(addMonths(date, direction));
+  }
+
+  return toDateInputValue(addDays(date, direction * (mode === "week" ? 7 : 1)));
 }
 
-function getCalendarDays(mode: "day" | "week", anchorDate: string) {
+function getMonthDays(anchor: Date) {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const lastDate = new Date(year, month + 1, 0).getDate();
+
+  return Array.from({ length: lastDate }, (_, index) => new Date(year, month, index + 1));
+}
+
+function getCalendarRange(mode: CalendarMode, anchorDate: string) {
   const anchor = fromDateInputValue(anchorDate);
+
+  if (mode === "week") {
+    return toWeekBoundsIso(anchor);
+  }
+
+  if (mode === "month") {
+    const days = getMonthDays(anchor);
+    const first = toDayBoundsIso(days[0]);
+    const last = toDayBoundsIso(days[days.length - 1]);
+
+    return {
+      from: first.from,
+      to: last.to
+    };
+  }
+
+  return toDayBoundsIso(anchor);
+}
+
+function getCalendarDays(mode: CalendarMode, anchorDate: string) {
+  const anchor = fromDateInputValue(anchorDate);
+
+  if (mode === "month") {
+    return getMonthDays(anchor);
+  }
+
   const start = mode === "week" ? startOfWeek(anchor) : anchor;
   return Array.from({ length: mode === "week" ? 7 : 1 }, (_, index) => addDays(start, index));
+}
+
+function formatCalendarHeader(day: Date) {
+  return {
+    dayNumber: new Intl.DateTimeFormat("en-US", { day: "numeric" }).format(day),
+    weekday: new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(day).toUpperCase()
+  };
+}
+
+function formatCalendarButtonDate(value: string) {
+  const date = fromDateInputValue(value);
+  const today = toDateKey(new Date()) === toDateKey(date);
+
+  if (today) {
+    return "Today";
+  }
+
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" }).format(date);
+}
+
+function getInitials(value: string) {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "A";
 }
 
 function canConfirm(appointment: AppointmentRecord) {
@@ -111,27 +178,6 @@ function canCancel(appointment: AppointmentRecord) {
 
 function canComplete(appointment: AppointmentRecord) {
   return appointment.status === "CONFIRMED";
-}
-
-function getVisibleCalendarWindow(appointments: AppointmentRecord[]) {
-  const timedAppointments = appointments.filter((appointment) => appointment.startAt && appointment.endAt);
-
-  if (!timedAppointments.length) {
-    return {
-      endHour: defaultCalendarEndHour,
-      startHour: defaultCalendarStartHour
-    };
-  }
-
-  const minStart = Math.min(...timedAppointments.map((appointment) => getMinutesFromDayStart(appointment.startAt)));
-  const maxEnd = Math.max(...timedAppointments.map((appointment) => getMinutesFromDayStart(appointment.endAt)));
-  const startHour = Math.max(0, Math.min(defaultCalendarStartHour, Math.floor(minStart / 60)));
-  const endHour = Math.min(24, Math.max(defaultCalendarEndHour, Math.ceil(maxEnd / 60) + 1));
-
-  return {
-    endHour: Math.max(startHour + 1, endHour),
-    startHour
-  };
 }
 
 function QuickActions({ appointment, onAction }: { appointment: AppointmentRecord; onAction: (type: AppointmentActionType, appointment: AppointmentRecord) => void }) {
@@ -158,14 +204,12 @@ function CalendarView({
   days,
   endHour,
   onSelect,
-  onAction,
   startHour
 }: {
   appointments: AppointmentRecord[];
   days: Date[];
   endHour: number;
   onSelect: (appointment: AppointmentRecord) => void;
-  onAction: (type: AppointmentActionType, appointment: AppointmentRecord) => void;
   startHour: number;
 }) {
   const calendarTotalMinutes = (endHour - startHour) * 60;
@@ -187,8 +231,8 @@ function CalendarView({
       <div className="appointment-calendar-time-spacer" />
       {days.map((day) => (
         <div className="appointment-calendar-day-header" key={toDateKey(day)}>
-          <strong>{formatAppointmentDate(day)}</strong>
-          <span>{toDateKey(day)}</span>
+          <span>{formatCalendarHeader(day).weekday}</span>
+          <strong>{formatCalendarHeader(day).dayNumber}</strong>
         </div>
       ))}
       <div className="appointment-calendar-times">
@@ -218,7 +262,6 @@ function CalendarView({
                     <strong>{appointment.title}</strong>
                     <small>{appointment.customerName} / {appointment.agentName}</small>
                   </button>
-                  <QuickActions appointment={appointment} onAction={onAction} />
                 </article>
               );
             })}
@@ -243,6 +286,19 @@ function SelectedAppointmentPanel({
       </aside>
     );
   }
+
+  const feedback = appointment.feedbacks[0];
+  const attendeeRows = [
+    { id: "customer", name: appointment.customerName, role: "Customer" },
+    { id: "agent", name: appointment.agentName, role: "Agent" },
+    ...appointment.participants.map((participant) => ({
+      id: participant.id,
+      name: participant.userName,
+      role: `${participant.participantRole} / ${participant.responseStatus}`
+    }))
+  ];
+  const interest = feedback?.interestLevel || "MEDIUM";
+  const rating = feedback?.rating ?? 0;
 
   return (
     <aside className="appointment-side-panel">
@@ -274,9 +330,57 @@ function SelectedAppointmentPanel({
           <dd>{appointment.propertyName}</dd>
         </div>
       </dl>
+      <section className="appointment-side-section">
+        <h4>Attendees</h4>
+        <div className="appointment-attendee-list">
+          {attendeeRows.map((attendee) => (
+            <article key={String(attendee.id)}>
+              <span className="appointment-avatar">{getInitials(attendee.name)}</span>
+              <div>
+                <strong>{attendee.name}</strong>
+                <small>{attendee.role}</small>
+              </div>
+              <Button size="icon" variant="ghost" title={`Message ${attendee.name}`}>
+                <Mail size={15} />
+              </Button>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="appointment-side-section">
+        <h4>Property details</h4>
+        <div className="appointment-property-grid">
+          <div>
+            <span>Type</span>
+            <strong>{appointment.listingTitle || "Commercial Office"}</strong>
+          </div>
+          <div>
+            <span>Size</span>
+            <strong>12,500 sqft</strong>
+          </div>
+          <div>
+            <span>Asking rent</span>
+            <strong>$85 / sqft</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong className="appointment-property-available">Available</strong>
+          </div>
+        </div>
+      </section>
       <div className="appointment-side-feedback">
-        <strong>Viewing feedback</strong>
-        <p>{appointment.feedbacks[0]?.comments || "Feedback can be captured after the viewing."}</p>
+        <h4>Viewing feedback</h4>
+        <div className="appointment-interest-segment" aria-label="Interest level">
+          {["LOW", "MEDIUM", "HIGH"].map((level) => (
+            <span className={interest === level ? "active" : ""} key={level}>{level.charAt(0) + level.slice(1).toLowerCase()}</span>
+          ))}
+        </div>
+        <div className="appointment-rating-stars" aria-label={`Client rating ${rating || "not rated"}`}>
+          {[1, 2, 3, 4, 5].map((value) => (
+            <Star className={rating >= value ? "filled" : ""} key={value} size={17} />
+          ))}
+        </div>
+        <p>{feedback?.comments || "Feedback can be captured after the viewing."}</p>
       </div>
       <div className="appointment-side-actions">
         <Button variant="secondary" size="sm" disabled={!canConfirm(appointment)} onClick={() => onAction("confirm", appointment)}>Confirm</Button>
@@ -292,7 +396,7 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [view, setView] = useState<"calendar" | "list">("calendar");
-  const [calendarMode, setCalendarMode] = useState<"day" | "week">("week");
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("week");
   const [anchorDate, setAnchorDate] = useState(toDateInputValue(new Date()));
   const [createOpen, setCreateOpen] = useState(false);
   const [status, setStatus] = useState("");
@@ -435,9 +539,11 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
   );
   const rows = appointmentsQuery.data?.content ?? [];
   const selectedAppointment =
-    calendarQuery.data?.content.find((appointment) => String(appointment.id) === String(selectedAppointmentId)) ??
-    calendarQuery.data?.content[0];
-  const calendarWindow = getVisibleCalendarWindow(calendarQuery.data?.content ?? []);
+    calendarQuery.data?.content.find((appointment) => String(appointment.id) === String(selectedAppointmentId));
+  const calendarWindow = {
+    endHour: defaultCalendarEndHour,
+    startHour: defaultCalendarStartHour
+  };
   const calendarTitle = new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric"
@@ -581,18 +687,22 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
         {view === "calendar" ? (
           <>
             <div className="appointment-calendar-toolbar">
-              <Button variant="secondary" size="sm" onClick={() => setAnchorDate(shiftCalendarDate(anchorDate, calendarMode === "week" ? -7 : -1))}>
-                <ChevronLeft size={16} />
-                Previous
-              </Button>
-              <Input label="Calendar date" type="date" value={anchorDate} onChange={(event) => setAnchorDate(event.target.value)} />
-              <Button variant="secondary" size="sm" onClick={() => setAnchorDate(shiftCalendarDate(anchorDate, calendarMode === "week" ? 7 : 1))}>
-                Next
-                <ChevronRight size={16} />
-              </Button>
-              <Button variant={calendarMode === "week" ? "primary" : "secondary"} size="sm" onClick={() => setCalendarMode("week")}>Week</Button>
-              <Button variant={calendarMode === "day" ? "primary" : "secondary"} size="sm" onClick={() => setCalendarMode("day")}>Day</Button>
-              <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
+              <div className="appointment-date-group" aria-label="Date navigation">
+                <button type="button" onClick={() => setAnchorDate(shiftCalendarDate(anchorDate, calendarMode, -1))}>
+                  <ChevronLeft size={16} />
+                </button>
+                <input aria-label="Calendar date" type="date" value={anchorDate} onChange={(event) => setAnchorDate(event.target.value)} />
+                <strong>{formatCalendarButtonDate(anchorDate)}</strong>
+                <button type="button" onClick={() => setAnchorDate(shiftCalendarDate(anchorDate, calendarMode, 1))}>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="appointment-view-group" aria-label="Calendar view">
+                <button className={calendarMode === "week" ? "active" : ""} type="button" onClick={() => setCalendarMode("week")}>Week</button>
+                <button className={calendarMode === "day" ? "active" : ""} type="button" onClick={() => setCalendarMode("day")}>Day</button>
+                <button className={calendarMode === "month" ? "active" : ""} type="button" onClick={() => setCalendarMode("month")}>Month</button>
+              </div>
+              <Button className="appointment-new-viewing" variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
                 <Plus size={16} />
                 New viewing
               </Button>
@@ -604,16 +714,15 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
               <EmptyState title="No appointments found" description="Create a viewing or adjust filters." />
             ) : null}
             {!calendarError && calendarQuery.data ? (
-              <div className="appointment-calendar-layout">
+              <div className={`appointment-calendar-layout${selectedAppointment ? " appointment-calendar-layout-detail-open" : ""}`}>
                 <CalendarView
                   appointments={calendarQuery.data.content}
                   days={calendarDays}
                   endHour={calendarWindow.endHour}
-                  onAction={openAction}
                   onSelect={(appointment) => setSelectedAppointmentId(appointment.id)}
                   startHour={calendarWindow.startHour}
                 />
-                <SelectedAppointmentPanel appointment={selectedAppointment} onAction={openAction} />
+                {selectedAppointment ? <SelectedAppointmentPanel appointment={selectedAppointment} onAction={openAction} /> : null}
               </div>
             ) : null}
           </>

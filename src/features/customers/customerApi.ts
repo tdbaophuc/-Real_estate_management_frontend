@@ -33,14 +33,18 @@ export type CustomerNote = {
 
 export type CustomerRequirement = {
   currency: string;
+  districtName: string;
   id: number | string;
   location: string;
   maxArea: number | null;
   maxPrice: number | null;
   minArea: number | null;
   minPrice: number | null;
+  propertyTypeName: string;
+  provinceName: string;
   purpose: CustomerPurpose | null;
   summary: string;
+  wardName: string;
 };
 
 export type CustomerTimelineItem = {
@@ -140,6 +144,18 @@ function readNestedRecord(source: BackendRecord, key: string) {
     : null;
 }
 
+function readFirstNestedRecord(source: BackendRecord, keys: string[]) {
+  for (const key of keys) {
+    const record = readNestedRecord(source, key);
+
+    if (record) {
+      return record;
+    }
+  }
+
+  return null;
+}
+
 function readRecordArray(source: BackendRecord, keys: string[]) {
   for (const key of keys) {
     const value = source[key];
@@ -159,43 +175,55 @@ function readPurpose(value: string): CustomerPurpose | null {
 function normalizeRequirement(source: BackendRecord, index = 0): CustomerRequirement {
   const id = readNumber(source, ["id", "requirementId"]) ?? readString(source, ["id", "requirementId"], String(index));
   const purpose = readPurpose(readString(source, ["purpose"]));
-  const location = readString(source, ["location", "preferredLocation", "area"]);
+  const provinceName = readString(source, ["provinceName", "province"]);
+  const districtName = readString(source, ["districtName", "district"]);
+  const wardName = readString(source, ["wardName", "ward"]);
+  const location =
+    readString(source, ["location", "preferredLocation", "area"]) ||
+    [wardName, districtName, provinceName].filter(Boolean).join(", ");
+  const propertyTypeName = readString(source, ["propertyTypeName", "propertyType", "assetClass"]);
 
   return {
     currency: readString(source, ["currency"], "VND"),
+    districtName,
     id,
     location,
     maxArea: readNumber(source, ["maxArea", "areaMax"]),
-    maxPrice: readNumber(source, ["maxPrice", "priceMax"]),
+    maxPrice: readNumber(source, ["maxPrice", "priceMax", "maxBudget"]),
     minArea: readNumber(source, ["minArea", "areaMin"]),
-    minPrice: readNumber(source, ["minPrice", "priceMin"]),
+    minPrice: readNumber(source, ["minPrice", "priceMin", "minBudget"]),
+    propertyTypeName,
+    provinceName,
     purpose,
     summary:
       readString(source, ["summary", "description", "notes"]) ||
-      [purpose, location].filter(Boolean).join(" / ") ||
-      "Requirement details are updating"
+      [propertyTypeName || purpose, location].filter(Boolean).join(" / ") ||
+      "Requirement details are updating",
+    wardName
   };
 }
 
 function normalizeCustomer(source: BackendRecord): CustomerRecord {
-  const id = readNumber(source, ["id", "customerId"]) ?? readString(source, ["id", "customerId"]);
+  const detailCustomer = readFirstNestedRecord(source, ["customer", "profile", "customerProfile"]);
+  const customerSource = detailCustomer ?? source;
+  const id = readNumber(customerSource, ["id", "customerId"]) ?? readString(customerSource, ["id", "customerId"]);
 
   return {
-    assignedAgentId: readNumber(source, ["assignedAgentId"]),
-    code: readString(source, ["code"], String(id || "CUSTOMER")),
-    email: readString(source, ["email"]),
-    fullName: readString(source, ["fullName", "name"], "Unnamed customer"),
-    id: id || readString(source, ["code", "email", "phone"]),
+    assignedAgentId: readNumber(customerSource, ["assignedAgentId"]),
+    code: readString(customerSource, ["code"], String(id || "CUSTOMER")),
+    email: readString(customerSource, ["email"]),
+    fullName: readString(customerSource, ["fullName", "name"], "Unnamed customer"),
+    id: id || readString(customerSource, ["code", "email", "phone"]),
     noteItems: readRecordArray(source, ["noteItems", "customerNotes", "notesList", "notes"]).map(normalizeNote),
-    notes: readString(source, ["notes", "note"]),
-    phone: readString(source, ["phone", "phoneNumber"]),
-    preferredContactMethod: readString(source, ["preferredContactMethod"], "PHONE"),
-    priority: readString(source, ["priority"], "MEDIUM"),
+    notes: readString(customerSource, ["notes", "note"]),
+    phone: readString(customerSource, ["phone", "phoneNumber"]),
+    preferredContactMethod: readString(customerSource, ["preferredContactMethod"], "PHONE"),
+    priority: readString(customerSource, ["priority"], "MEDIUM"),
     requirements: readRecordArray(source, ["requirements", "customerRequirements"]).map(normalizeRequirement),
-    source: readString(source, ["source"], "MANUAL"),
-    status: readString(source, ["status"], "ACTIVE"),
+    source: readString(customerSource, ["source"], "MANUAL"),
+    status: readString(customerSource, ["status"], "ACTIVE"),
     tags: readRecordArray(source, ["tags", "customerTags"]).map(normalizeTag),
-    userId: readNumber(source, ["userId"])
+    userId: readNumber(customerSource, ["userId"])
   };
 }
 
@@ -218,8 +246,8 @@ function normalizeTag(source: BackendRecord, index = 0): CustomerTag {
 function normalizeTimelineItem(source: BackendRecord, index = 0): CustomerTimelineItem {
   return {
     description: readString(source, ["description", "message", "content"], "Timeline details are updating"),
-    id: readNumber(source, ["id", "timelineId"]) ?? readString(source, ["id", "timelineId"], String(index)),
-    timestamp: readString(source, ["timestamp", "createdAt", "date"]),
+    id: readNumber(source, ["id", "timelineId", "referenceId"]) ?? readString(source, ["id", "timelineId", "referenceId"], String(index)),
+    timestamp: readString(source, ["timestamp", "createdAt", "occurredAt", "date"]),
     title: readString(source, ["title", "event", "type"], "Activity"),
     type: readString(source, ["type", "eventType"], "ACTIVITY")
   };

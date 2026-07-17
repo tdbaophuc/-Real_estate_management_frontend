@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CalendarClock, CheckCircle2, ClipboardCheck, MessageSquare, RotateCcw, Users, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, ClipboardCheck, MessageSquare, RotateCcw, Star, Users, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { ActionBar } from "../../shared/ui/ActionBar";
 import { Button } from "../../shared/ui/Button";
@@ -11,7 +11,6 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { PageHeader } from "../../shared/ui/PageHeader";
 import { SectionCard } from "../../shared/ui/SectionCard";
-import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { Timeline, type TimelineItem } from "../../shared/ui/Timeline";
 import {
@@ -363,17 +362,37 @@ export function AppointmentDetailPage() {
           </SectionCard>
           <SectionCard title="Viewing feedback" description="Capture buyer reaction and next action after completion." actions={<MessageSquare size={20} />}>
             <form className="appointment-feedback-form" onSubmit={submitFeedback}>
-              <Input label="Rating" value={rating} onChange={(event) => setRating(event.target.value)} placeholder="1-5" />
-              <Select
-                label="Interest"
-                options={[
-                  { label: "High", value: "HIGH" },
-                  { label: "Medium", value: "MEDIUM" },
-                  { label: "Low", value: "LOW" }
-                ]}
-                value={interestLevel}
-                onChange={(event) => setInterestLevel(event.target.value)}
-              />
+              <div className="appointment-feedback-field">
+                <span>Interest</span>
+                <div className="appointment-interest-segment appointment-interest-buttons">
+                  {["LOW", "MEDIUM", "HIGH"].map((level) => (
+                    <button
+                      className={interestLevel === level ? "active" : ""}
+                      key={level}
+                      type="button"
+                      onClick={() => setInterestLevel(level)}
+                    >
+                      {level.charAt(0) + level.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="appointment-feedback-field">
+                <span>Client rating</span>
+                <div className="appointment-rating-stars appointment-rating-buttons">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <button
+                      aria-label={`${value} star rating`}
+                      className={Number(rating) >= value ? "filled" : ""}
+                      key={value}
+                      type="button"
+                      onClick={() => setRating(String(value))}
+                    >
+                      <Star size={18} />
+                    </button>
+                  ))}
+                </div>
+              </div>
               <textarea className="input textarea" value={comments} onChange={(event) => setComments(event.target.value)} placeholder="Buyer reaction and overall comments" />
               <Input label="Positive points" value={positivePoints} onChange={(event) => setPositivePoints(event.target.value)} />
               <Input label="Concerns" value={concerns} onChange={(event) => setConcerns(event.target.value)} />
@@ -391,7 +410,11 @@ export function AppointmentDetailPage() {
                   </header>
                   <p>{item.comments}</p>
                   <div className="appointment-feedback-meta">
-                    <span>Rating: {item.rating ?? "N/A"}</span>
+                    <span className="appointment-feedback-stars">
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <Star className={(item.rating ?? 0) >= value ? "filled" : ""} key={value} size={14} />
+                      ))}
+                    </span>
                     {item.positivePoints ? <span>Positive: {item.positivePoints}</span> : null}
                     {item.concerns ? <span>Concerns: {item.concerns}</span> : null}
                     {item.nextAction ? <span>Next: {item.nextAction}</span> : null}
