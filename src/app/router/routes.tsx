@@ -32,6 +32,7 @@ import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
 import { TransactionDetailPage } from "../../features/transactions/TransactionDetailPage";
+import { TransactionFormPage } from "../../features/transactions/TransactionFormPage";
 import { TransactionsPage } from "../../features/transactions/TransactionsPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
@@ -247,6 +248,22 @@ export const router: Router = createBrowserRouter([
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
                 <TransactionsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/transactions/create",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <TransactionFormPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/transactions/:id/edit",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <TransactionFormPage />
               </RoleGuard>
             )
           },

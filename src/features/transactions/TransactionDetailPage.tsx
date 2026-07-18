@@ -1,10 +1,13 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Banknote, FileText, ReceiptText } from "lucide-react";
+import { ArrowLeft, Banknote, Clock3, Download, FileText, ReceiptText, Upload } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { downloadFile, uploadFile, type FileAccessLevel, type FileResource } from "../../shared/api/fileApi";
 import { Button } from "../../shared/ui/Button";
+import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
+import { FileUploader } from "../../shared/ui/FileUploader";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
@@ -12,24 +15,13 @@ import { formatCurrency } from "../../shared/lib/format";
 import {
   addDeposit,
   addInvoice,
-  addPayment,
   addPaymentSchedule,
-  addReceipt,
   createIdempotencyKey,
   getTransaction,
-  updateTransactionStatus,
-  type TransactionStatus
+  updateTransactionStatus
 } from "./transactionApi";
 
-const statusOptions: Array<{ label: string; value: TransactionStatus }> = [
-  { label: "Pending", value: "PENDING" },
-  { label: "Deposited", value: "DEPOSITED" },
-  { label: "Contract signed", value: "CONTRACT_SIGNED" },
-  { label: "Payment in progress", value: "PAYMENT_IN_PROGRESS" },
-  { label: "Completed", value: "COMPLETED" },
-  { label: "Cancelled", value: "CANCELLED" },
-  { label: "Refunded", value: "REFUNDED" }
-];
+type ModalKind = "deposit" | "document" | "invoice" | "schedule" | null;
 
 function statusTone(status: string) {
   if (status === "COMPLETED") {
@@ -40,7 +32,7 @@ function statusTone(status: string) {
     return "danger";
   }
 
-  if (status === "PENDING" || status === "DEPOSITED") {
+  if (status === "PENDING" || status === "DEPOSITED" || status === "PAYMENT_IN_PROGRESS") {
     return "warning";
   }
 
@@ -51,26 +43,46 @@ function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
 }
 
+function displayEnumLabel(value: string) {
+  return value.split("_").join(" ");
+}
+
+function initials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "TX";
+}
+
+function formatFileSize(size?: number) {
+  if (!size) {
+    return "Size updating";
+  }
+
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export function TransactionDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
-  const [nextStatus, setNextStatus] = useState<TransactionStatus>("PENDING");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [depositDate, setDepositDate] = useState("");
-  const [depositNotes, setDepositNotes] = useState("");
-  const [scheduleAmount, setScheduleAmount] = useState("");
-  const [scheduleDueDate, setScheduleDueDate] = useState("");
-  const [scheduleNotes, setScheduleNotes] = useState("");
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("OFFLINE");
-  const [paymentReference, setPaymentReference] = useState("");
-  const [paymentNotes, setPaymentNotes] = useState("");
+  const [activeModal, setActiveModal] = useState<ModalKind>(null);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState("");
+  const [notes, setNotes] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceNotes, setInvoiceNotes] = useState("");
-  const [receiptPaymentId, setReceiptPaymentId] = useState("");
-  const [receiptNumber, setReceiptNumber] = useState("");
-  const [receiptNotes, setReceiptNotes] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [documentAccessLevel, setDocumentAccessLevel] = useState<FileAccessLevel>("PRIVATE");
+  const [uploadedDocuments, setUploadedDocuments] = useState<FileResource[]>([]);
   const transactionQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getTransaction(id ?? ""),
@@ -82,87 +94,100 @@ export function TransactionDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["transaction", id] }),
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
     ]);
-  const statusMutation = useMutation({
-    mutationFn: () => updateTransactionStatus(id ?? "", nextStatus),
+  const markPaidMutation = useMutation({
+    mutationFn: () => updateTransactionStatus(id ?? "", "COMPLETED"),
     onSuccess: invalidateTransactionData
   });
   const depositMutation = useMutation({
     mutationFn: () =>
       addDeposit(id ?? "", {
-        amount: Number(depositAmount),
+        amount: Number(amount),
         currency: transactionQuery.data?.currency ?? "VND",
-        date: depositDate || undefined,
+        date: date || undefined,
         idempotencyKey: createIdempotencyKey("deposit"),
-        notes: depositNotes || undefined
+        notes: notes || undefined
       }),
     onSuccess: () => {
-      setDepositAmount("");
-      setDepositDate("");
-      setDepositNotes("");
+      closeModal();
       return invalidateTransactionData();
     }
   });
   const scheduleMutation = useMutation({
     mutationFn: () =>
       addPaymentSchedule(id ?? "", {
-        amount: Number(scheduleAmount),
+        amount: Number(amount),
         currency: transactionQuery.data?.currency ?? "VND",
-        dueDate: scheduleDueDate,
-        notes: scheduleNotes || undefined
+        dueDate: date,
+        notes: notes || undefined
       }),
     onSuccess: () => {
-      setScheduleAmount("");
-      setScheduleDueDate("");
-      setScheduleNotes("");
+      closeModal();
       return invalidateTransactionData();
     }
   });
-  const paymentMutation = useMutation({
-    mutationFn: () =>
-      addPayment(id ?? "", {
-        amount: Number(paymentAmount),
-        currency: transactionQuery.data?.currency ?? "VND",
-        date: paymentDate || undefined,
-        idempotencyKey: createIdempotencyKey("payment"),
-        method: paymentMethod,
-        notes: paymentNotes || undefined,
-        referenceNumber: paymentReference || undefined
-      }),
-    onSuccess: () => {
-      setPaymentAmount("");
-      setPaymentDate("");
-      setPaymentReference("");
-      setPaymentNotes("");
-      return invalidateTransactionData();
+  const documentMutation = useMutation({
+    mutationFn: () => Promise.all(selectedFiles.map((file) => uploadFile(file, documentAccessLevel))),
+    onSuccess: (documents) => {
+      setUploadedDocuments((current) => [...documents, ...current]);
+      closeModal();
     }
   });
   const invoiceMutation = useMutation({
-    mutationFn: () => addInvoice(id ?? "", { invoiceNumber: invoiceNumber || undefined, notes: invoiceNotes || undefined }),
+    mutationFn: () => addInvoice(id ?? "", { invoiceNumber: invoiceNumber || undefined, notes: notes || undefined }),
     onSuccess: () => {
-      setInvoiceNumber("");
-      setInvoiceNotes("");
-      return invalidateTransactionData();
-    }
-  });
-  const receiptMutation = useMutation({
-    mutationFn: () => addReceipt(id ?? "", receiptPaymentId, { notes: receiptNotes || undefined, receiptNumber: receiptNumber || undefined }),
-    onSuccess: () => {
-      setReceiptPaymentId("");
-      setReceiptNumber("");
-      setReceiptNotes("");
+      closeModal();
       return invalidateTransactionData();
     }
   });
   const transaction = transactionQuery.data;
+  const recordedPaidAmount = useMemo(() => {
+    if (!transaction) {
+      return 0;
+    }
+
+    return [...transaction.deposits, ...transaction.payments].reduce((sum, record) => sum + (record.amount ?? 0), 0);
+  }, [transaction]);
+  const totalAmount = transaction?.totalAmount ?? 0;
+  const paidAmount = transaction?.confirmedAmount ?? recordedPaidAmount;
+  const remainingAmount = transaction?.remainingAmount ?? Math.max(totalAmount - paidAmount, 0);
   const normalizedError = transactionQuery.error ? normalizeUnknownError(transactionQuery.error) : null;
   const actionError =
-    statusMutation.error ??
+    markPaidMutation.error ??
     depositMutation.error ??
     scheduleMutation.error ??
-    paymentMutation.error ??
-    invoiceMutation.error ??
-    receiptMutation.error;
+    documentMutation.error ??
+    invoiceMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+
+  function closeModal() {
+    setActiveModal(null);
+    setAmount("");
+    setDate("");
+    setNotes("");
+    setInvoiceNumber("");
+    setSelectedFiles([]);
+    setDocumentAccessLevel("PRIVATE");
+  }
+
+  function submitModal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (activeModal === "deposit") {
+      depositMutation.mutate();
+    }
+
+    if (activeModal === "schedule") {
+      scheduleMutation.mutate();
+    }
+
+    if (activeModal === "document") {
+      documentMutation.mutate();
+    }
+
+    if (activeModal === "invoice") {
+      invoiceMutation.mutate();
+    }
+  }
 
   if (!id) {
     return (
@@ -183,7 +208,7 @@ export function TransactionDetailPage() {
 
   if (normalizedError) {
     return (
-      <section className="content-section">
+      <section className="transaction-detail-page">
         <EmptyState title="Transaction could not be loaded" description={normalizedError.message} action={<Button onClick={() => transactionQuery.refetch()}>Retry</Button>} />
       </section>
     );
@@ -193,166 +218,191 @@ export function TransactionDetailPage() {
     return null;
   }
 
-  function submitStatus(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    statusMutation.mutate();
-  }
-
   return (
-    <section>
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/transactions">
-          <ArrowLeft size={16} />
-          Back to transactions
-        </Link>
-      </Button>
-      <div className="detail-header">
-        <div>
-          <div className="detail-badges">
-            <StatusBadge tone={statusTone(transaction.status)}>{transaction.status}</StatusBadge>
+    <section className="transaction-detail-page">
+      <header className="transaction-page-header">
+        <div className="transaction-page-title">
+          <nav className="transaction-breadcrumb" aria-label="Transaction breadcrumb">
+            <Link to="/transactions"><ArrowLeft size={16} />Transactions</Link>
+            <span>/</span>
+            <strong>{transaction.code}</strong>
+          </nav>
+          <div>
+            <h1>Transaction #{transaction.code}</h1>
+            <p>{transaction.title}</p>
           </div>
-          <h1>{transaction.title}</h1>
-          <p className="muted">{transaction.code}</p>
         </div>
-      </div>
-      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
-      <div className="transaction-detail-grid">
-        <section className="content-section transaction-profile-card">
-          <p className="eyebrow">Metadata</p>
-          <div><span>Total</span><strong>{transaction.totalAmount ? formatCurrency(transaction.totalAmount, transaction.currency) : "Updating"}</strong></div>
-          <div><span>Contract</span><strong>{transaction.contractId ?? "Not linked"}</strong></div>
-          <div><span>Customer</span><strong>{transaction.customerId ?? "Not linked"}</strong></div>
-          <div><span>Property</span><strong>{transaction.propertyId ?? "Not linked"}</strong></div>
-        </section>
-        <section className="content-section">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Status</p>
-              <h2>Update status</h2>
+        <div className="transaction-header-actions">
+          <Button variant="secondary" onClick={() => setActiveModal("invoice")}>
+            <FileText size={16} />
+            Generate Invoice
+          </Button>
+          <Button disabled={markPaidMutation.isPending || transaction.status === "COMPLETED"} onClick={() => markPaidMutation.mutate()}>
+            <Banknote size={16} />
+            Mark as Paid
+          </Button>
+          <Button asChild variant="secondary">
+            <Link to={`/transactions/${transaction.id}/edit`}>Update Transaction</Link>
+          </Button>
+        </div>
+      </header>
+
+      {normalizedActionError ? <p className="form-alert transaction-inline-alert">{normalizedActionError.message}</p> : null}
+
+      <div className="transaction-dashboard-grid">
+        <main className="transaction-dashboard-main">
+          <section className="transaction-dashboard-card transaction-status-card">
+            <div className="transaction-status-hero">
+              <span><Clock3 size={30} /></span>
+              <div>
+                <p className="transaction-section-title">Current Status</p>
+                <StatusBadge tone={statusTone(transaction.status)}>{displayEnumLabel(transaction.status)}</StatusBadge>
+              </div>
             </div>
-          </div>
-          <form className="transaction-inline-form" onSubmit={submitStatus}>
-            <Select label="Status" options={statusOptions} value={nextStatus} onChange={(event) => setNextStatus(event.target.value as TransactionStatus)} />
-            <Button type="submit" disabled={nextStatus === transaction.status || statusMutation.isPending}>Update status</Button>
-          </form>
-        </section>
-      </div>
-      <div className="transaction-detail-grid">
-        <section className="content-section">
-          <div className="section-header"><div><p className="eyebrow">Deposit</p><h2>Add deposit</h2></div><Banknote size={20} /></div>
-          <form className="transaction-inline-form" onSubmit={(event) => {
-            event.preventDefault();
-            depositMutation.mutate();
-          }}>
-            <Input label="Amount" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} />
-            <Input label="Date" type="date" value={depositDate} onChange={(event) => setDepositDate(event.target.value)} />
-            <Input label="Notes" value={depositNotes} onChange={(event) => setDepositNotes(event.target.value)} />
-            <Button type="submit" disabled={!toNumber(depositAmount) || depositMutation.isPending}>Add deposit</Button>
-          </form>
-          <RecordStack records={transaction.deposits} currency={transaction.currency} emptyText="No deposits recorded." />
-        </section>
-        <section className="content-section">
-          <div className="section-header"><div><p className="eyebrow">Schedule</p><h2>Payment schedules</h2></div></div>
-          <form className="transaction-inline-form" onSubmit={(event) => {
-            event.preventDefault();
-            scheduleMutation.mutate();
-          }}>
-            <Input label="Amount" value={scheduleAmount} onChange={(event) => setScheduleAmount(event.target.value)} />
-            <Input label="Due date" type="date" value={scheduleDueDate} onChange={(event) => setScheduleDueDate(event.target.value)} />
-            <Input label="Notes" value={scheduleNotes} onChange={(event) => setScheduleNotes(event.target.value)} />
-            <Button type="submit" disabled={!toNumber(scheduleAmount) || !scheduleDueDate || scheduleMutation.isPending}>Add schedule</Button>
-          </form>
-          <RecordStack records={transaction.paymentSchedules} currency={transaction.currency} emptyText="No payment schedules." />
-        </section>
-      </div>
-      <section className="content-section">
-        <div className="section-header"><div><p className="eyebrow">Payments</p><h2>Offline or external payment records</h2></div></div>
-        <form className="transaction-payment-form" onSubmit={(event) => {
-          event.preventDefault();
-          paymentMutation.mutate();
-        }}>
-          <Input label="Amount" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} />
-          <Input label="Date" type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
-          <Input label="Method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value.toUpperCase())} />
-          <Input label="Reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} />
-          <Input label="Notes" value={paymentNotes} onChange={(event) => setPaymentNotes(event.target.value)} />
-          <Button type="submit" disabled={!toNumber(paymentAmount) || paymentMutation.isPending}>Add payment</Button>
-        </form>
-        <div className="customer-list-stack">
-          {transaction.payments.length ? transaction.payments.map((payment) => (
-            <article key={payment.id}>
-              <strong>{payment.amount ? formatCurrency(payment.amount, payment.currency) : "Amount updating"}</strong>
-              <small>{payment.method} / {payment.referenceNumber || "No reference"}</small>
-              <small>{payment.date || "Date updating"}</small>
-            </article>
-          )) : <p className="muted">No payments recorded.</p>}
-        </div>
-      </section>
-      <div className="transaction-detail-grid">
-        <section className="content-section">
-          <div className="section-header"><div><p className="eyebrow">Invoices</p><h2>Invoice metadata</h2></div><FileText size={20} /></div>
-          <form className="transaction-inline-form" onSubmit={(event) => {
-            event.preventDefault();
-            invoiceMutation.mutate();
-          }}>
-            <Input label="Invoice number" value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} />
-            <Input label="Notes" value={invoiceNotes} onChange={(event) => setInvoiceNotes(event.target.value)} />
-            <Button type="submit" disabled={invoiceMutation.isPending}>Create invoice</Button>
-          </form>
-          <div className="customer-list-stack">
-            {transaction.invoices.length ? transaction.invoices.map((invoice) => (
-              <article key={invoice.id}>
-                <strong>{invoice.invoiceNumber}</strong>
-                <small>{invoice.issuedAt || "Issue date updating"}</small>
-                {invoice.notes ? <small>{invoice.notes}</small> : null}
-              </article>
-            )) : <p className="muted">No invoices created.</p>}
-          </div>
-        </section>
-        <section className="content-section">
-          <div className="section-header"><div><p className="eyebrow">Receipts</p><h2>Receipt metadata</h2></div><ReceiptText size={20} /></div>
-          <form className="transaction-inline-form" onSubmit={(event) => {
-            event.preventDefault();
-            receiptMutation.mutate();
-          }}>
-            <Input label="Payment id" value={receiptPaymentId} onChange={(event) => setReceiptPaymentId(event.target.value)} />
-            <Input label="Receipt number" value={receiptNumber} onChange={(event) => setReceiptNumber(event.target.value)} />
-            <Input label="Notes" value={receiptNotes} onChange={(event) => setReceiptNotes(event.target.value)} />
-            <Button type="submit" disabled={!receiptPaymentId.trim() || receiptMutation.isPending}>Create receipt</Button>
-          </form>
-          <div className="customer-list-stack">
-            {transaction.receipts.length ? transaction.receipts.map((receipt) => (
-              <article key={receipt.id}>
-                <strong>{receipt.receiptNumber}</strong>
-                <small>{receipt.issuedAt || "Issue date updating"}</small>
-                {receipt.notes ? <small>{receipt.notes}</small> : null}
-              </article>
-            )) : <p className="muted">No receipts created.</p>}
-          </div>
-        </section>
-      </div>
-    </section>
-  );
-}
+            <div className="transaction-money-grid">
+              <article><span>Total Amount</span><strong>{formatCurrency(totalAmount, transaction.currency)}</strong></article>
+              <article className="is-paid"><span>Amount Paid</span><strong>{formatCurrency(paidAmount, transaction.currency)}</strong></article>
+              <article><span>Remaining Balance</span><strong>{formatCurrency(remainingAmount, transaction.currency)}</strong></article>
+            </div>
+          </section>
 
-function RecordStack({
-  currency,
-  emptyText,
-  records
-}: {
-  currency: string;
-  emptyText: string;
-  records: Array<{ amount: number | null; currency?: string; date?: string; dueDate?: string; id: number | string; notes?: string; status?: string }>;
-}) {
-  return (
-    <div className="customer-list-stack">
-      {records.length ? records.map((record) => (
-        <article key={record.id}>
-          <strong>{record.amount ? formatCurrency(record.amount, record.currency ?? currency) : "Amount updating"}</strong>
-          <small>{record.dueDate || record.date || "Date updating"}{record.status ? ` / ${record.status}` : ""}</small>
-          {record.notes ? <small>{record.notes}</small> : null}
-        </article>
-      )) : <p className="muted">{emptyText}</p>}
-    </div>
+          <section className="transaction-dashboard-card">
+            <p className="transaction-section-title">Counterparty Info</p>
+            <div className="transaction-counterparty">
+              <span>{initials(transaction.title)}</span>
+              <div>
+                <strong>{transaction.customerName || (transaction.customerId ? `Customer #${transaction.customerId}` : "Counterparty updating")}</strong>
+                <small>Email is not returned by the transaction API yet.</small>
+                <small>Bank details are not returned by the transaction API yet.</small>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside className="transaction-dashboard-side">
+          <section className="transaction-dashboard-card">
+            <div className="transaction-card-heading">
+              <p className="transaction-section-title">Payment Schedule</p>
+              <Button variant="ghost" size="sm" onClick={() => setActiveModal("schedule")}>Edit Terms</Button>
+            </div>
+            <table className="transaction-schedule-table">
+              <thead><tr><th>Installment</th><th>Due Date</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody>
+                {transaction.paymentSchedules.length ? transaction.paymentSchedules.map((schedule, index) => (
+                  <tr key={schedule.id}>
+                    <td>#{index + 1}</td>
+                    <td>{schedule.dueDate || schedule.date || "Date updating"}</td>
+                    <td>{schedule.amount != null ? formatCurrency(schedule.amount, schedule.currency) : "Amount updating"}</td>
+                    <td><StatusBadge tone={statusTone(schedule.status)}>{displayEnumLabel(schedule.status)}</StatusBadge></td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={4}>No payment schedules.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="transaction-dashboard-card">
+            <div className="transaction-card-heading">
+              <p className="transaction-section-title">Payment Records & Evidence</p>
+              <Button variant="secondary" size="sm" onClick={() => setActiveModal("document")}><Upload size={15} />Upload Document</Button>
+            </div>
+            <div className="transaction-evidence-list">
+              {uploadedDocuments.map((document) => (
+                <article key={document.id}>
+                  <span><FileText size={18} /></span>
+                  <div>
+                    <strong>{document.originalFileName || document.fileName}</strong>
+                    <small>{formatFileSize(document.size)}{document.uploadedAt ? ` / ${document.uploadedAt}` : ""}</small>
+                  </div>
+                  <Button
+                    aria-label={`Download ${document.originalFileName || document.fileName}`}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => downloadFile(document.id, document.originalFileName || document.fileName)}
+                  >
+                    <Download size={16} />
+                  </Button>
+                </article>
+              ))}
+              {[...transaction.payments, ...transaction.deposits].map((record) => (
+                <article key={record.id}>
+                  <span><ReceiptText size={18} /></span>
+                  <div>
+                    <strong>{record.amount != null ? formatCurrency(record.amount, record.currency) : "Amount updating"}</strong>
+                    <small>{record.date || "Date updating"}{record.notes ? ` / ${record.notes}` : ""}</small>
+                  </div>
+                </article>
+              ))}
+              {!uploadedDocuments.length && !transaction.payments.length && !transaction.deposits.length ? <p className="muted">No evidence documents uploaded.</p> : null}
+            </div>
+            <div className="transaction-missing-evidence">
+              Awaiting receipt evidence for outstanding balance.
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <Dialog open={Boolean(activeModal)} onClose={closeModal} title={activeModal === "invoice" ? "Generate Invoice" : activeModal === "schedule" ? "Edit Payment Terms" : activeModal === "deposit" ? "Add Deposit" : "Upload Document"}>
+        <form className="dialog-body transaction-modal-form" onSubmit={submitModal}>
+          {activeModal === "invoice" ? (
+            <>
+              <Input label="Invoice number" value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} />
+              <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </>
+          ) : activeModal === "document" ? (
+            <>
+              <FileUploader
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                multiple
+                onFilesSelected={setSelectedFiles}
+              />
+              {selectedFiles.length ? (
+                <div className="transaction-selected-documents">
+                  {selectedFiles.map((file) => (
+                    <span key={`${file.name}-${file.size}`}>{file.name} / {formatFileSize(file.size)}</span>
+                  ))}
+                </div>
+              ) : null}
+              <Select
+                label="Access level"
+                options={[
+                  { label: "Private", value: "PRIVATE" },
+                  { label: "Public", value: "PUBLIC" }
+                ]}
+                value={documentAccessLevel}
+                onChange={(event) => setDocumentAccessLevel(event.target.value as FileAccessLevel)}
+              />
+              <p className="muted">
+                Files are uploaded through the file API. The current transaction API does not return a transaction-specific document list yet.
+              </p>
+            </>
+          ) : (
+            <>
+              <Input label="Amount" value={amount} onChange={(event) => setAmount(event.target.value)} />
+              <Input label={activeModal === "schedule" ? "Due date" : "Date"} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+              <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </>
+          )}
+          <footer className="dialog-actions">
+            <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
+            <Button
+              type="submit"
+              disabled={
+                (activeModal !== "invoice" && activeModal !== "document" && !toNumber(amount)) ||
+                (activeModal === "schedule" && !date) ||
+                (activeModal === "document" && !selectedFiles.length) ||
+                depositMutation.isPending ||
+                scheduleMutation.isPending ||
+                documentMutation.isPending ||
+                invoiceMutation.isPending
+              }
+            >
+              Confirm
+            </Button>
+          </footer>
+        </form>
+      </Dialog>
+    </section>
   );
 }
