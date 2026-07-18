@@ -1,6 +1,6 @@
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, List, Mail, Plus, RotateCcw, Star, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { ActionBar } from "../../shared/ui/ActionBar";
@@ -394,6 +394,7 @@ function SelectedAppointmentPanel({
 
 export function AppointmentsPage({ my = false }: { my?: boolean }) {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("week");
@@ -422,6 +423,24 @@ export function AppointmentsPage({ my = false }: { my?: boolean }) {
   const [rescheduleLocation, setRescheduleLocation] = useState("");
   const [rescheduleNotes, setRescheduleNotes] = useState("");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | string | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") {
+      return;
+    }
+
+    setCreateOpen(true);
+    setLeadId(searchParams.get("leadId") ?? "");
+    setCreateCustomerId(searchParams.get("customerId") ?? "");
+    setListingId(searchParams.get("listingId") ?? "");
+    setTitle((current) => current || "Lead viewing");
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("create");
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const calendarRange = useMemo(() => getCalendarRange(calendarMode, anchorDate), [anchorDate, calendarMode]);
   const calendarDays = useMemo(() => getCalendarDays(calendarMode, anchorDate), [anchorDate, calendarMode]);
   const baseFilters = useMemo<AppointmentSearchParams>(() => ({

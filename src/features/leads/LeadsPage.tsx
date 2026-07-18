@@ -17,7 +17,7 @@ import {
   type LeadRecord
 } from "./leadApi";
 import {
-  searchMyFollowUpTasks,
+  searchFollowUpTasks,
   updateFollowUpTaskStatus
 } from "../follow-up-tasks/followUpTaskApi";
 
@@ -144,7 +144,7 @@ export function LeadsPage() {
   });
   const tasksQuery = useQuery({
     queryFn: () =>
-      searchMyFollowUpTasks({
+      searchFollowUpTasks({
         page: 0,
         size: 8,
         sortBy: "dueAt",

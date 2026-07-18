@@ -9,6 +9,7 @@ import { AuditLogsPage } from "../../features/admin/AuditLogsPage";
 import { AiPage } from "../../features/ai/AiPage";
 import { AccountPage } from "../../features/account/AccountPage";
 import { ContractDetailPage } from "../../features/contracts/ContractDetailPage";
+import { ContractFormPage } from "../../features/contracts/ContractFormPage";
 import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { CommissionsPage } from "../../features/commissions/CommissionsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
@@ -214,6 +215,22 @@ export const router: Router = createBrowserRouter([
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
                 <ContractsPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/contracts/new",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ContractFormPage />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/contracts/:id/edit",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+                <ContractFormPage />
               </RoleGuard>
             )
           },

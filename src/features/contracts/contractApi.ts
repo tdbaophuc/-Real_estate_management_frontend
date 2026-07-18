@@ -21,6 +21,8 @@ export type ContractDocument = {
   fileId: number | string | null;
   id: number | string;
   primaryDocument: boolean;
+  sizeLabel: string;
+  uploadedAt: string;
   url: string;
 };
 
@@ -51,7 +53,10 @@ export type ContractRecord = {
   id: number | string;
   listingId: number | null;
   parties: ContractParty[];
+  propertyAddress: string;
   propertyId: number | null;
+  agentId: number | null;
+  specialConditions: string;
   startDate: string;
   status: ContractStatus | string;
   timeline: ContractTimelineItem[];
@@ -61,6 +66,7 @@ export type ContractRecord = {
 };
 
 export type ContractRequest = {
+  agentId?: number;
   code: string;
   contractType: ContractType;
   currency: string;
@@ -71,14 +77,18 @@ export type ContractRequest = {
   propertyId?: number;
   startDate?: string;
   status?: ContractStatus;
+  specialConditions?: string;
   title: string;
   totalValue?: number;
   transactionId?: number;
 };
 
 export type ContractSearchParams = {
+  agentId?: string;
+  customerId?: string;
   keyword?: string;
   page: number;
+  propertyId?: string;
   size: number;
   status?: string;
   type?: string;
@@ -150,6 +160,22 @@ function readRecordArray(source: BackendRecord, keys: string[]) {
   return [];
 }
 
+function formatFileSize(value: number | null) {
+  if (!value) {
+    return "";
+  }
+
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} KB`;
+  }
+
+  return `${value} B`;
+}
+
 function normalizeDocument(source: BackendRecord, index = 0): ContractDocument {
   const file = source.file && typeof source.file === "object" && !Array.isArray(source.file)
     ? (source.file as BackendRecord)
@@ -168,6 +194,8 @@ function normalizeDocument(source: BackendRecord, index = 0): ContractDocument {
     fileId: fileId || null,
     id: readNumber(source, ["id", "documentId"]) ?? readString(source, ["id", "documentId"], String(index)),
     primaryDocument: readBoolean(source, ["primaryDocument", "primary"]),
+    sizeLabel: formatFileSize(readNumber(source, ["size", "fileSize", "fileSizeBytes"]) ?? (file ? readNumber(file, ["size", "fileSize", "fileSizeBytes"]) : null)),
+    uploadedAt: readString(source, ["uploadedAt", "createdAt", "updatedAt"]) || (file ? readString(file, ["uploadedAt", "createdAt", "updatedAt"]) : ""),
     url: readString(source, ["url", "fileUrl", "downloadUrl", "publicUrl"]) || (file ? readString(file, ["publicUrl", "url"]) : "")
   };
 }
@@ -194,6 +222,9 @@ function normalizeTimelineItem(source: BackendRecord, index = 0): ContractTimeli
 
 function normalizeContract(source: BackendRecord): ContractRecord {
   const id = readNumber(source, ["id", "contractId"]) ?? readString(source, ["id", "contractId"]);
+  const property = source.property && typeof source.property === "object" && !Array.isArray(source.property)
+    ? (source.property as BackendRecord)
+    : null;
 
   return {
     code: readString(source, ["code"], String(id || "CONTRACT")),
@@ -206,7 +237,10 @@ function normalizeContract(source: BackendRecord): ContractRecord {
     id: id || readString(source, ["code", "title"]),
     listingId: readNumber(source, ["listingId"]),
     parties: readRecordArray(source, ["parties", "contractParties"]).map(normalizeParty),
+    propertyAddress: readString(source, ["propertyAddress", "address"]) || (property ? readString(property, ["address", "fullAddress", "name", "title"]) : ""),
     propertyId: readNumber(source, ["propertyId"]),
+    agentId: readNumber(source, ["agentId", "assignedAgentId"]),
+    specialConditions: readString(source, ["specialConditions", "conditions", "terms", "description", "notes"]),
     startDate: readString(source, ["startDate"]),
     status: readString(source, ["status"], "DRAFT"),
     timeline: readRecordArray(source, ["timeline", "statusTimeline", "histories"]).map(normalizeTimelineItem),
@@ -218,8 +252,11 @@ function normalizeContract(source: BackendRecord): ContractRecord {
 
 function toQueryParams(params: ContractSearchParams): QueryParams {
   return {
+    agentId: params.agentId,
+    customerId: params.customerId,
     keyword: params.keyword,
     page: params.page,
+    propertyId: params.propertyId,
     size: params.size,
     status: params.status,
     type: params.type
