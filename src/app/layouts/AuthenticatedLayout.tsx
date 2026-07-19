@@ -7,6 +7,7 @@ import {
   BriefcaseBusiness,
   Building2,
   CalendarDays,
+  ChevronDown,
   ClipboardCheck,
   Contact,
   FileSignature,
@@ -26,8 +27,9 @@ import {
   Users
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../shared/auth/useAuth";
+import type { RoleCode } from "../../shared/types/auth";
 import { Button } from "../../shared/ui/Button";
 import { canAccessNavigationItem, navigationItems } from "../../shared/constants/navigation";
 import { getUnreadNotificationCount } from "../../features/notifications/notificationApi";
@@ -58,6 +60,7 @@ const iconMap = {
 export function AuthenticatedLayout() {
   const { user, logout } = useAuth();
   const { t } = useTranslation();
+  const location = useLocation();
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -74,6 +77,11 @@ export function AuthenticatedLayout() {
   });
   const unreadCount = unreadQuery.data ?? 0;
   const closeMobileNav = () => setIsMobileNavOpen(false);
+  const commissionSubItems: Array<{ href: string; label: string; roles: RoleCode[] }> = [
+    { href: "/commissions/my", label: "My Commissions", roles: ["ADMIN", "MANAGER", "AGENT"] as RoleCode[] },
+    { href: "/commissions/manage", label: "Commissions Management", roles: ["ADMIN", "MANAGER"] as RoleCode[] },
+    { href: "/commissions/rules", label: "Commission Rules", roles: ["ADMIN", "MANAGER"] as RoleCode[] }
+  ].filter((item) => item.roles.some((role) => roles.includes(role)));
   const sidebarNavigation = (
     <>
       <div className="sidebar-header">
@@ -98,6 +106,26 @@ export function AuthenticatedLayout() {
       <nav className="sidebar-nav" aria-label={t("app.title")}>
         {visibleItems.map((item) => {
           const Icon = iconMap[item.icon];
+
+          if (item.icon === "commissions") {
+            return (
+              <details className="sidebar-nav-group" key={item.href} open={location.pathname.startsWith("/commissions")}>
+                <summary title={t(item.labelKey)}>
+                  <Icon size={17} />
+                  <span>{t(item.labelKey)}</span>
+                  <ChevronDown className="sidebar-nav-group-chevron" size={15} />
+                </summary>
+                <div className="sidebar-subnav">
+                  {commissionSubItems.map((subItem) => (
+                    <NavLink key={subItem.href} to={subItem.href} onClick={closeMobileNav}>
+                      <span>{subItem.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
+            );
+          }
+
           return (
             <NavLink
               key={item.href}

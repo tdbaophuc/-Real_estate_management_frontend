@@ -4,49 +4,81 @@ import type { PaginatedResponse, QueryParams } from "../../shared/types/api";
 export type CommissionStatus = "APPROVED" | "CANCELLED" | "PAID" | "PENDING";
 
 export type CommissionRecord = {
-  agentEmail: string;
-  agentId: number | null;
-  agentName: string;
   amount: number | null;
+  approvedAt: string;
+  approvedById: number | null;
+  approvedByName: string;
+  baseAmount: number | null;
+  beneficiaryName: string;
+  beneficiaryUserId: number | null;
   calculationType: string;
-  commissionRate: number | null;
+  commissionRuleCode: string;
+  commissionRuleId: number | null;
+  createdAt: string;
   currency: string;
   id: number | string;
+  notes: string;
   paidAt: string;
+  paidById: number | null;
+  paidByName: string;
+  paymentReference: string;
+  rate: number | null;
   status: CommissionStatus | string;
   transactionCode: string;
   transactionId: number | null;
+  transactionType: string;
+  updatedAt: string;
 };
 
 export type CommissionSearchParams = {
-  agentId?: string;
+  beneficiaryUserId?: string;
+  direction?: "ASC" | "DESC";
   page: number;
   size: number;
+  sortBy?: string;
   status?: string;
   transactionId?: string;
+};
+
+export type CommissionMarkPaidRequest = {
+  notes?: string;
+  paidAt?: string;
+  paymentReference?: string;
 };
 
 export type CommissionRuleRecord = {
   active: boolean;
   calculationType: string;
+  code: string;
   currency: string;
   description: string;
   effectiveFrom: string;
   effectiveTo: string;
+  fixedAmount: number | null;
   id: number | string;
+  maxTransactionValue: number | null;
+  minTransactionValue: number | null;
   name: string;
+  priority: number | null;
   rate: number | null;
+  transactionType: string;
 };
 
 export type CommissionRuleRequest = {
   active?: boolean;
   calculationType: string;
+  code: string;
   currency?: string;
   description?: string;
   effectiveFrom?: string;
   effectiveTo?: string;
+  fixedAmount?: number;
+  maxTransactionValue?: number;
+  minTransactionValue?: number;
   name: string;
+  priority?: number;
   rate?: number;
+  transactionType: string;
 };
 
 type BackendRecord = Record<string, unknown>;
@@ -89,26 +121,33 @@ function readNumber(source: BackendRecord, keys: string[]) {
 
 function normalizeCommission(source: BackendRecord): CommissionRecord {
   const id = readNumber(source, ["id", "commissionId"]) ?? readString(source, ["id", "commissionId"]);
-  const agent = isRecord(source.agent) ? source.agent : {};
-  const user = isRecord(source.user) ? source.user : {};
   const transaction = isRecord(source.transaction) ? source.transaction : {};
 
   return {
-    agentEmail: readString(source, ["agentEmail"]) || readString(agent, ["email"]) || readString(user, ["email"]),
-    agentId: readNumber(source, ["agentId"]) ?? readNumber(agent, ["id", "userId"]) ?? readNumber(user, ["id", "userId"]),
-    agentName:
-      readString(source, ["agentName"]) ||
-      readString(agent, ["fullName", "name", "email"]) ||
-      readString(user, ["fullName", "name", "email"], "Assigned agent"),
     amount: readNumber(source, ["amount", "commissionAmount", "value"]),
+    approvedAt: readString(source, ["approvedAt"]),
+    approvedById: readNumber(source, ["approvedById"]),
+    approvedByName: readString(source, ["approvedByName"]),
+    baseAmount: readNumber(source, ["baseAmount"]),
+    beneficiaryName: readString(source, ["beneficiaryName", "agentName", "userName"], "Beneficiary updating"),
+    beneficiaryUserId: readNumber(source, ["beneficiaryUserId", "agentId", "userId"]),
     calculationType: readString(source, ["calculationType", "type"], "PERCENTAGE"),
-    commissionRate: readNumber(source, ["commissionRate", "rate", "percentage"]),
+    commissionRuleCode: readString(source, ["commissionRuleCode"]),
+    commissionRuleId: readNumber(source, ["commissionRuleId"]),
+    createdAt: readString(source, ["createdAt"]),
     currency: readString(source, ["currency"], "VND"),
     id: id || readString(source, ["code"], "commission"),
+    notes: readString(source, ["notes"]),
     paidAt: readString(source, ["paidAt", "paymentDate", "updatedAt"]),
+    paidById: readNumber(source, ["paidById"]),
+    paidByName: readString(source, ["paidByName"]),
+    paymentReference: readString(source, ["paymentReference"]),
+    rate: readNumber(source, ["rate", "commissionRate", "percentage"]),
     status: readString(source, ["status"], "PENDING"),
     transactionCode: readString(source, ["transactionCode"]) || readString(transaction, ["code", "title"]),
-    transactionId: readNumber(source, ["transactionId"]) ?? readNumber(transaction, ["id", "transactionId"])
+    transactionId: readNumber(source, ["transactionId"]) ?? readNumber(transaction, ["id", "transactionId"]),
+    transactionType: readString(source, ["transactionType"]) || readString(transaction, ["transactionType", "type"]),
+    updatedAt: readString(source, ["updatedAt"])
   };
 }
 
@@ -118,13 +157,19 @@ function normalizeCommissionRule(source: BackendRecord): CommissionRuleRecord {
   return {
     active: source.active === undefined ? true : Boolean(source.active),
     calculationType: readString(source, ["calculationType", "type"], "PERCENTAGE"),
+    code: readString(source, ["code"]),
     currency: readString(source, ["currency"], "VND"),
     description: readString(source, ["description"]),
     effectiveFrom: readString(source, ["effectiveFrom", "startDate"]),
     effectiveTo: readString(source, ["effectiveTo", "endDate"]),
+    fixedAmount: readNumber(source, ["fixedAmount"]),
     id: id || readString(source, ["name"], "rule"),
+    maxTransactionValue: readNumber(source, ["maxTransactionValue"]),
+    minTransactionValue: readNumber(source, ["minTransactionValue"]),
     name: readString(source, ["name", "title"], "Commission rule"),
-    rate: readNumber(source, ["rate", "commissionRate", "percentage"])
+    priority: readNumber(source, ["priority"]),
+    rate: readNumber(source, ["rate", "commissionRate", "percentage"]),
+    transactionType: readString(source, ["transactionType"], "SALE")
   };
 }
 
@@ -206,22 +251,20 @@ function normalizeCommissionPage(payload: unknown): PaginatedResponse<Commission
 
 function toQueryParams(params: CommissionSearchParams): QueryParams {
   return {
-    agentId: params.agentId,
+    beneficiaryUserId: params.beneficiaryUserId,
+    direction: params.direction,
     page: params.page,
     size: params.size,
+    sortBy: params.sortBy,
     status: params.status,
     transactionId: params.transactionId
   };
 }
 
-export function getMyCommissions(params: { page: number; size: number; status?: string }) {
+export function getMyCommissions(params: CommissionSearchParams) {
   return apiClient
     .get<unknown>("/commissions/my", {
-      query: {
-        page: params.page,
-        size: params.size,
-        status: params.status
-      }
+      query: toQueryParams(params)
     })
     .then(normalizeCommissionPage);
 }
@@ -232,13 +275,13 @@ export function searchCommissions(params: CommissionSearchParams) {
     .then(normalizeCommissionPage);
 }
 
-export function markCommissionPaid(commissionId: number | string) {
+export function markCommissionPaid(commissionId: number | string, request: CommissionMarkPaidRequest) {
   return apiClient
-    .patch<BackendRecord>(`/commissions/${encodeURIComponent(String(commissionId))}/mark-paid`)
+    .patch<BackendRecord>(`/commissions/${encodeURIComponent(String(commissionId))}/mark-paid`, request)
     .then(normalizeCommission);
 }
 
-export function searchCommissionRules(params: { page: number; size: number }) {
+export function searchCommissionRules(params: { active?: boolean; direction?: "ASC" | "DESC"; page: number; size: number; sortBy?: string; transactionType?: string }) {
   return apiClient
     .get<unknown>("/commission-rules", { query: params })
     .then(normalizeRulePage);

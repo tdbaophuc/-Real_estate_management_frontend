@@ -276,9 +276,45 @@ export const router: Router = createBrowserRouter([
           },
           {
             path: "/commissions",
+            element: <Navigate to="/commissions/my" replace />
+          },
+          {
+            path: "/commissions/my",
             element: (
               <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
-                <CommissionsPage />
+                <CommissionsPage view="my" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/commissions/manage",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
+                <CommissionsPage view="manage" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/commissions/rules",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
+                <CommissionsPage view="rules" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/commissions/rules/new",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
+                <CommissionsPage view="rule-form" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/commissions/rules/:ruleId/edit",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
+                <CommissionsPage view="rule-form" />
               </RoleGuard>
             )
           },

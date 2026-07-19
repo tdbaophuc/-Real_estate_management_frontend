@@ -90,7 +90,7 @@ export const navigationItems: NavigationItem[] = [
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
-    href: "/commissions",
+    href: "/commissions/my",
     labelKey: "navigation.commissions",
     icon: "commissions",
     roles: ["ADMIN", "MANAGER", "AGENT"]
