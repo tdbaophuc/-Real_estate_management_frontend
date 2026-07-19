@@ -20,7 +20,6 @@ import { RegisterPage } from "../../features/auth/RegisterPage";
 import { CustomerCreatePage } from "../../features/customers/CustomerCreatePage";
 import { CustomerDetailPage } from "../../features/customers/CustomerDetailPage";
 import { CustomersPage } from "../../features/customers/CustomersPage";
-import { NotificationsPage } from "../../features/notifications/NotificationsPage";
 import { ReportsPage } from "../../features/reports/ReportsPage";
 import { ListingDetailPage } from "../../features/listings/ListingDetailPage";
 import { ListingFormPage } from "../../features/listings/ListingFormPage";
@@ -285,11 +284,7 @@ export const router: Router = createBrowserRouter([
           },
           {
             path: "/notifications",
-            element: (
-              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
-                <NotificationsPage />
-              </RoleGuard>
-            )
+            element: <Navigate to="/dashboard" replace />
           },
           {
             path: "/reports",

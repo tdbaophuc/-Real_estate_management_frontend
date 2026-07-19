@@ -211,7 +211,7 @@ function CustomerDashboard() {
               <h3>{tx("Stay ready for a viewing")}</h3>
             </div>
           </div>
-          <Link className="customer-status-row" to="/notifications">
+          <div className="customer-status-row">
             <Bell size={18} />
             <span>
               <strong>{tx("Notification inbox")}</strong>
@@ -222,7 +222,7 @@ function CustomerDashboard() {
               </small>
             </span>
             <b>{unreadCount > 99 ? "99+" : unreadCount}</b>
-          </Link>
+          </div>
           <Link className="customer-status-row" to="/account">
             <CheckCircle2 size={18} />
             <span>

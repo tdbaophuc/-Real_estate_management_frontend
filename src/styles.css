@@ -5803,6 +5803,10 @@ p {
   position: relative;
 }
 
+.notification-trigger {
+  position: relative;
+}
+
 .notification-badge {
   position: absolute;
   top: -4px;
@@ -5818,6 +5822,213 @@ p {
   font-size: 0.68rem;
   font-weight: 850;
   line-height: 1;
+}
+
+.notification-popover-overlay {
+  position: fixed;
+  top: 72px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 950;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(2px);
+}
+
+.notification-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: 480px;
+  overflow: hidden;
+  border: 1px solid #d8dadc;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #d8dadc;
+}
+
+.notif-header-title {
+  margin: 0;
+  color: #1a1c1e;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.notif-mark-read {
+  border: 0;
+  padding: 0;
+  color: #0061a4;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.notif-mark-read:disabled {
+  color: #74777f;
+  cursor: not-allowed;
+}
+
+.notif-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.notif-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.notif-list::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: #d8dadc;
+}
+
+.notif-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #f2f4f6;
+  color: inherit;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.notif-item:hover {
+  background: #f2f4f6;
+}
+
+.notif-item.unread {
+  background: #f0f7ff;
+}
+
+.notif-item.unread::before {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0061a4;
+  content: "";
+  transform: translateY(-50%);
+}
+
+.notif-icon {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.notif-icon-lead {
+  color: #0061a4;
+  background: #e7f2ff;
+}
+
+.notif-icon-contract,
+.notif-icon-system {
+  color: #44474e;
+  background: #f2f4f6;
+}
+
+.notif-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 5px;
+}
+
+.notif-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.notif-title-row strong {
+  overflow: hidden;
+  color: #1a1c1e;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-title-row time {
+  color: #74777f;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.notif-copy > span:last-child {
+  color: #44474e;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.notif-state {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 20px;
+  color: #44474e;
+  text-align: center;
+}
+
+.notif-skeleton {
+  min-height: 64px;
+  cursor: default;
+  background: linear-gradient(90deg, #f7f9fb, #eef1f4, #f7f9fb);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.notif-footer {
+  border-top: 1px solid #d8dadc;
+  text-align: center;
+}
+
+.notif-footer button {
+  width: 100%;
+  border: 0;
+  padding: 12px 0;
+  color: #0061a4;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notif-footer button:hover:not(:disabled) {
+  background: #f2f4f6;
+}
+
+.notif-footer button:disabled {
+  color: #74777f;
+  cursor: default;
 }
 
 .app-main {
@@ -7020,6 +7231,15 @@ p {
 }
 
 @media (max-width: 720px) {
+  .notification-popover {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: min(480px, calc(100vh - 96px));
+  }
+
   .app-layout {
     grid-template-columns: 1fr;
   }

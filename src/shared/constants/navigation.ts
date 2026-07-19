@@ -16,7 +16,6 @@ export type NavigationItem = {
   | "contracts"
   | "transactions"
   | "commissions"
-  | "notifications"
   | "reports"
   | "ai"
   | "admin";
@@ -95,12 +94,6 @@ export const navigationItems: NavigationItem[] = [
     labelKey: "navigation.commissions",
     icon: "commissions",
     roles: ["ADMIN", "MANAGER", "AGENT"]
-  },
-  {
-    href: "/notifications",
-    labelKey: "navigation.notifications",
-    icon: "notifications",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
   },
   {
     href: "/reports",

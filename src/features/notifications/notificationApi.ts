@@ -2,12 +2,16 @@ import { apiClient } from "../../shared/api/client";
 import type { PaginatedResponse } from "../../shared/types/api";
 
 export type AppNotification = {
+  actionUrl: string;
   channel: string;
   createdAt: string | null;
   id: number | string;
   message: string;
+  referenceId: number | null;
+  referenceType: string;
   read: boolean;
   title: string;
+  type: string;
 };
 
 type BackendNotification = Record<string, unknown>;
@@ -58,14 +62,18 @@ function normalizeNotification(notification: BackendNotification, index: number)
     readString(notification, ["id", "notificationId"], String(index));
 
   return {
+    actionUrl: readString(notification, ["actionUrl", "url", "targetUrl"]),
     channel: readString(notification, ["channel"], "IN_APP"),
     createdAt: readString(notification, ["createdAt", "createdDate", "timestamp"]) || null,
     id,
     message: readString(notification, ["message", "body", "content"], "No notification message."),
+    referenceId: readNumber(notification, ["referenceId", "entityId", "targetId"]),
+    referenceType: readString(notification, ["referenceType", "entityType", "targetType"]),
     read:
       readBoolean(notification, ["read", "isRead"]) ||
       Boolean(readString(notification, ["readAt"])),
-    title: readString(notification, ["title", "subject", "type"], "Notification")
+    title: readString(notification, ["title", "subject", "type"], "Notification"),
+    type: readString(notification, ["type", "notificationType"], "SYSTEM")
   };
 }
 

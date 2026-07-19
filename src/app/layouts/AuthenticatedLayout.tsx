@@ -31,6 +31,7 @@ import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { canAccessNavigationItem, navigationItems } from "../../shared/constants/navigation";
 import { getUnreadNotificationCount } from "../../features/notifications/notificationApi";
+import { NotificationPopover } from "../../features/notifications/NotificationPopover";
 import { LanguageSwitcher } from "../../shared/i18n/LanguageSwitcher";
 import { AiAssistantPanel } from "../../features/ai/AiAssistantPanel";
 import { cn } from "../../shared/lib/cn";
@@ -59,6 +60,7 @@ export function AuthenticatedLayout() {
   const { t } = useTranslation();
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const roles = user?.roles ?? [];
   const visibleItems = navigationItems.filter((item) =>
@@ -182,16 +184,24 @@ export function AuthenticatedLayout() {
               {t("navigation.aiAssistant")}
             </Button>
             <LanguageSwitcher />
-            <Button asChild variant="ghost" size="icon" aria-label={t("app.notifications")}>
-              <Link className="notification-button" to="/notifications">
+            <div className="notification-trigger">
+              <Button
+                className="notification-button"
+                variant="ghost"
+                size="icon"
+                aria-label={t("app.notifications")}
+                aria-expanded={isNotificationOpen}
+                onClick={() => setIsNotificationOpen((current) => !current)}
+              >
                 <Bell size={18} />
                 {unreadCount > 0 ? (
                   <span className="notification-badge">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 ) : null}
-              </Link>
-            </Button>
+              </Button>
+              {isNotificationOpen ? <NotificationPopover onClose={() => setIsNotificationOpen(false)} /> : null}
+            </div>
             <details className="user-menu">
               <summary aria-label={t("app.userMenu")}>
                 <span className="user-chip">
