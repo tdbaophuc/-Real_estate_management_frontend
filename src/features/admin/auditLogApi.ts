@@ -10,18 +10,23 @@ export type AuditLogRecord = {
   details: string;
   id: number | string;
   ipAddress: string;
+  newValue: string;
+  oldValue: string;
   resourceId: string;
   resourceType: string;
 };
 
 export type AuditLogSearchParams = {
   action?: string;
-  actor?: string;
-  endDate?: string;
+  actorId?: string;
+  direction?: "ASC" | "DESC";
+  from?: string;
   page: number;
+  resourceId?: string;
   resourceType?: string;
   size: number;
-  startDate?: string;
+  sortBy?: string;
+  to?: string;
 };
 
 type BackendRecord = Record<string, unknown>;
@@ -87,6 +92,8 @@ function normalizeAuditLog(source: BackendRecord): AuditLogRecord {
     details: stringifyDetails(source.details ?? source.metadata ?? source.payload ?? source.changeSet),
     id,
     ipAddress: readString(source, ["ipAddress", "ip"]),
+    newValue: stringifyDetails(source.newValue),
+    oldValue: stringifyDetails(source.oldValue),
     resourceId: readString(source, ["resourceId", "entityId", "targetId"]),
     resourceType: readString(source, ["resourceType", "entityType", "targetType"], "Resource")
   };
@@ -95,15 +102,15 @@ function normalizeAuditLog(source: BackendRecord): AuditLogRecord {
 function toQueryParams(params: AuditLogSearchParams): QueryParams {
   return {
     action: params.action,
-    actor: params.actor,
-    actorKeyword: params.actor,
-    endDate: params.endDate,
-    from: params.startDate,
+    actorId: params.actorId,
+    direction: params.direction,
+    from: params.from,
     page: params.page,
+    resourceId: params.resourceId,
     resourceType: params.resourceType,
     size: params.size,
-    startDate: params.startDate,
-    to: params.endDate
+    sortBy: params.sortBy,
+    to: params.to
   };
 }
 

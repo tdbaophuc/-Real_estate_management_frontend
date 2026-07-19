@@ -353,6 +353,14 @@ export const router: Router = createBrowserRouter([
                 <AuditLogsPage />
               </RoleGuard>
             )
+          },
+          {
+            path: "/admin/audit-logs/:auditLogId",
+            element: (
+              <RoleGuard allowedRoles={["ADMIN"]}>
+                <AuditLogsPage />
+              </RoleGuard>
+            )
           }
         ]
       }
