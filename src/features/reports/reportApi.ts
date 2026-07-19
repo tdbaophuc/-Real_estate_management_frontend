@@ -8,32 +8,53 @@ export type DateRangeParams = {
   startDate: string;
 };
 
-export type ReportMetric = {
-  label: string;
-  value: number | string;
-  currency?: string;
+export type CurrencyAmount = {
+  amount: number;
+  count: number;
+  currency: string;
 };
 
-export type ReportSeriesPoint = {
-  label: string;
-  primary: number;
-  secondary?: number;
+export type CountByStatus = {
+  count: number;
+  status: string;
 };
 
-export type ReportTableRow = {
-  amount?: number;
-  currency?: string;
-  date?: string;
-  id: string;
-  metric?: number | string;
-  name: string;
-  status?: string;
+export type RevenueSummary = {
+  completedPayments: number;
+  completedTransactionValue: number;
+  completedTransactions: number;
+  currency: string;
+  paidCommissions: number;
+  verifiedDeposits: number;
 };
 
-export type ReportData = {
-  metrics: ReportMetric[];
-  rows: ReportTableRow[];
-  series: ReportSeriesPoint[];
+export type RevenueReportData = {
+  from: string;
+  revenueSummary: RevenueSummary[];
+  to: string;
+};
+
+export type LeadReportData = {
+  from: string;
+  leadsByStatus: CountByStatus[];
+  to: string;
+  totalLeads: number;
+};
+
+export type TransactionReportData = {
+  completedTransactionValues: CurrencyAmount[];
+  from: string;
+  to: string;
+  totalTransactions: number;
+  transactionsByStatus: CountByStatus[];
+};
+
+export type CommissionReportData = {
+  commissionAmounts: CurrencyAmount[];
+  commissionsByStatus: CountByStatus[];
+  from: string;
+  to: string;
+  totalCommissions: number;
 };
 
 type BackendRecord = Record<string, unknown>;
@@ -44,10 +65,6 @@ const reportPaths: Record<ReportKind, string> = {
   revenue: "/reports/revenue",
   transactions: "/reports/transactions"
 };
-
-const summaryKeys = ["summary", "summaries", "metrics", "cards", "totals"];
-const seriesKeys = ["series", "chart", "chartData", "dataPoints", "timeline", "byDate", "items"];
-const tableKeys = ["rows", "table", "tableData", "details", "records", "items", "content"];
 
 function isRecord(value: unknown): value is BackendRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -82,14 +99,7 @@ function readNumber(source: BackendRecord, keys: string[]) {
     }
   }
 
-  return undefined;
-}
-
-function titleFromKey(key: string) {
-  return key
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return 0;
 }
 
 function readRecordArray(source: BackendRecord, keys: string[]) {
@@ -104,95 +114,104 @@ function readRecordArray(source: BackendRecord, keys: string[]) {
   return [];
 }
 
-function normalizeMetricFromRecord(source: BackendRecord, index: number): ReportMetric {
-  const value = readNumber(source, ["value", "amount", "total", "count", "metric"]) ?? readString(source, ["value"], "0");
-
+function normalizeCountByStatus(source: BackendRecord): CountByStatus {
   return {
-    currency: readString(source, ["currency"]),
-    label: readString(source, ["label", "name", "title", "key"], `Metric ${index + 1}`),
-    value
+    count: readNumber(source, ["count", "total"]),
+    status: readString(source, ["status", "label", "name"], "UNKNOWN")
   };
 }
 
-function normalizeMetrics(source: unknown): ReportMetric[] {
-  if (Array.isArray(source)) {
-    return source.filter(isRecord).map(normalizeMetricFromRecord);
-  }
-
-  if (!isRecord(source)) {
-    return [];
-  }
-
-  const nested = readRecordArray(source, summaryKeys);
-
-  if (nested.length) {
-    return nested.map(normalizeMetricFromRecord);
-  }
-
-  const ignoredKeys = new Set([...seriesKeys, ...tableKeys]);
-  return Object.entries(source)
-    .filter(([key, value]) => !ignoredKeys.has(key) && (typeof value === "number" || typeof value === "string"))
-    .slice(0, 6)
-    .map(([key, value]) => ({
-      currency: key.toLowerCase().includes("revenue") || key.toLowerCase().includes("amount") ? "VND" : undefined,
-      label: titleFromKey(key),
-      value: typeof value === "number" ? value : String(value || "0")
-    }));
-}
-
-function normalizeSeries(source: unknown): ReportSeriesPoint[] {
-  const records = Array.isArray(source)
-    ? source.filter(isRecord)
-    : isRecord(source)
-      ? readRecordArray(source, seriesKeys)
-      : [];
-
-  return records
-    .map((record, index) => ({
-      label: readString(record, ["label", "date", "period", "month", "status", "name"], `Point ${index + 1}`),
-      primary: readNumber(record, ["primary", "value", "amount", "total", "count"]) ?? 0,
-      secondary: readNumber(record, ["secondary", "commission", "paid", "closed", "won"])
-    }))
-    .filter((point) => point.label || point.primary || point.secondary);
-}
-
-function normalizeRows(source: unknown): ReportTableRow[] {
-  const records = Array.isArray(source)
-    ? source.filter(isRecord)
-    : isRecord(source)
-      ? readRecordArray(source, tableKeys)
-      : [];
-
-  return records.map((record, index) => ({
-    amount: readNumber(record, ["amount", "totalAmount", "revenue", "commission", "value"]),
-    currency: readString(record, ["currency"], "VND"),
-    date: readString(record, ["date", "createdAt", "paidAt", "closedAt", "period"]),
-    id: readString(record, ["id", "code", "transactionId", "leadId", "commissionId"], String(index + 1)),
-    metric: readNumber(record, ["count", "rate", "score"]) ?? readString(record, ["metric", "source", "agentName"]),
-    name: readString(record, ["name", "title", "label", "customerName", "agentName", "status"], `Row ${index + 1}`),
-    status: readString(record, ["status", "pipelineStatus", "paymentStatus"])
-  }));
-}
-
-function normalizeReportData(source: unknown): ReportData {
+function normalizeCurrencyAmount(source: BackendRecord): CurrencyAmount {
   return {
-    metrics: normalizeMetrics(source),
-    rows: normalizeRows(source),
-    series: normalizeSeries(source)
+    amount: readNumber(source, ["amount", "value", "total"]),
+    count: readNumber(source, ["count"]),
+    currency: readString(source, ["currency"], "VND")
+  };
+}
+
+function normalizeRevenueSummary(source: BackendRecord): RevenueSummary {
+  return {
+    completedPayments: readNumber(source, ["completedPayments"]),
+    completedTransactionValue: readNumber(source, ["completedTransactionValue"]),
+    completedTransactions: readNumber(source, ["completedTransactions"]),
+    currency: readString(source, ["currency"], "VND"),
+    paidCommissions: readNumber(source, ["paidCommissions"]),
+    verifiedDeposits: readNumber(source, ["verifiedDeposits"])
+  };
+}
+
+function normalizeRevenueReport(payload: unknown): RevenueReportData {
+  const source = isRecord(payload) ? payload : {};
+
+  return {
+    from: readString(source, ["from"]),
+    revenueSummary: readRecordArray(source, ["revenueSummary"]).map(normalizeRevenueSummary),
+    to: readString(source, ["to"])
+  };
+}
+
+function normalizeLeadReport(payload: unknown): LeadReportData {
+  const source = isRecord(payload) ? payload : {};
+
+  return {
+    from: readString(source, ["from"]),
+    leadsByStatus: readRecordArray(source, ["leadsByStatus"]).map(normalizeCountByStatus),
+    to: readString(source, ["to"]),
+    totalLeads: readNumber(source, ["totalLeads"])
+  };
+}
+
+function normalizeTransactionReport(payload: unknown): TransactionReportData {
+  const source = isRecord(payload) ? payload : {};
+
+  return {
+    completedTransactionValues: readRecordArray(source, ["completedTransactionValues"]).map(normalizeCurrencyAmount),
+    from: readString(source, ["from"]),
+    to: readString(source, ["to"]),
+    totalTransactions: readNumber(source, ["totalTransactions"]),
+    transactionsByStatus: readRecordArray(source, ["transactionsByStatus"]).map(normalizeCountByStatus)
+  };
+}
+
+function normalizeCommissionReport(payload: unknown): CommissionReportData {
+  const source = isRecord(payload) ? payload : {};
+
+  return {
+    commissionAmounts: readRecordArray(source, ["commissionAmounts"]).map(normalizeCurrencyAmount),
+    commissionsByStatus: readRecordArray(source, ["commissionsByStatus"]).map(normalizeCountByStatus),
+    from: readString(source, ["from"]),
+    to: readString(source, ["to"]),
+    totalCommissions: readNumber(source, ["totalCommissions"])
   };
 }
 
 function toQueryParams(params: DateRangeParams): QueryParams {
   return {
-    endDate: params.endDate,
     from: params.startDate,
-    startDate: params.startDate,
     to: params.endDate
   };
 }
 
-export function getReport(kind: ReportKind, params: DateRangeParams) {
+export function getRevenueReport(params: DateRangeParams) {
   return apiClient
-    .get<unknown>(reportPaths[kind], { query: toQueryParams(params) })
-    .then(normalizeReportData);
+    .get<unknown>(reportPaths.revenue, { query: toQueryParams(params) })
+    .then(normalizeRevenueReport);
+}
+
+export function getLeadReport(params: DateRangeParams) {
+  return apiClient
+    .get<unknown>(reportPaths.leads, { query: toQueryParams(params) })
+    .then(normalizeLeadReport);
+}
+
+export function getTransactionReport(params: DateRangeParams) {
+  return apiClient
+    .get<unknown>(reportPaths.transactions, { query: toQueryParams(params) })
+    .then(normalizeTransactionReport);
+}
+
+export function getCommissionReport(params: DateRangeParams) {
+  return apiClient
+    .get<unknown>(reportPaths.commissions, { query: toQueryParams(params) })
+    .then(normalizeCommissionReport);
 }
