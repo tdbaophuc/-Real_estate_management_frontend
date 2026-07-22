@@ -1,13 +1,17 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   Bath,
   BedDouble,
   Building2,
+  CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronRight,
+  Compass,
   Copy,
+  DollarSign,
   Download,
   Edit,
   FileText,
@@ -18,6 +22,7 @@ import {
   Ruler,
   Sparkles,
   Star,
+  Tag,
   Trash2,
   UserRound
 } from "lucide-react";
@@ -28,13 +33,15 @@ import { Button } from "../../shared/ui/Button";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { FileUploader } from "../../shared/ui/FileUploader";
-import { ImageGallery } from "../../shared/ui/ImageGallery";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
+import { searchAdminUsers } from "../admin/adminUserApi";
 import { analyzePropertyImage, type ImageAnalysisSuggestion } from "../ai/aiApi";
+import { searchContracts, type ContractRecord } from "../contracts/contractApi";
+import { searchListings, type ListingRecord } from "../listings/listingApi";
 import {
   deletePropertyImage,
   deleteProperty,
@@ -63,7 +70,8 @@ const propertyStatusOptions = [
   { label: "Reserved", value: "RESERVED" },
   { label: "Sold", value: "SOLD" },
   { label: "Rented", value: "RENTED" },
-  { label: "Inactive", value: "INACTIVE" }
+  { label: "Inactive", value: "INACTIVE" },
+  { label: "Deleted", value: "DELETED" }
 ];
 
 function statusTone(status: string) {
@@ -106,7 +114,7 @@ function formatArea(value: number | null) {
 }
 
 function workflowSummary(status: string) {
-  const steps = ["DRAFT", "AVAILABLE", "RESERVED", "SOLD", "RENTED", "INACTIVE"];
+  const steps = ["DRAFT", "AVAILABLE", "RESERVED", "SOLD", "RENTED", "INACTIVE", "DELETED"];
   const activeIndex = steps.includes(status) ? steps.indexOf(status) : 0;
 
   return steps.map((step, index) => ({
@@ -163,6 +171,18 @@ function PersonBlock({
   );
 }
 
+function PropertyTitleStatus({ property }: { property: PropertyRecord }) {
+  return (
+    <div className="property-title-row">
+      <h1>{property.name}</h1>
+      <span className={`property-inline-status property-inline-status-${statusTone(property.status)}`}>
+        <Check size={14} />
+        {labelStatus(property.status)}
+      </span>
+    </div>
+  );
+}
+
 function ImageManagementPanel({
   images,
   isBusy,
@@ -198,6 +218,8 @@ function ImageManagementPanel({
     }
   });
   const analysisError = analysisMutation.error ? normalizeUnknownError(analysisMutation.error) : null;
+  const storageUsedBytes = images.reduce((total, image) => total + (image.fileSize ?? 0), 0);
+  const storageUsedMb = storageUsedBytes / 1024 / 1024;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -248,41 +270,55 @@ function ImageManagementPanel({
           <h2>Image management</h2>
         </div>
       </div>
-      <form className="property-image-upload" onSubmit={handleSubmit}>
-        <FileUploader
-          accept="image/*"
-          onFilesSelected={(files) => setSelectedFile(files[0] ?? null)}
-        />
-        <Input
-          label="Alt text"
-          value={altText}
-          onChange={(event) => setAltText(event.target.value)}
-          placeholder="Mat tien"
-        />
-        <Input
-          label="Display order"
-          type="number"
-          min={0}
-          value={displayOrder}
-          onChange={(event) => setDisplayOrder(event.target.value)}
-        />
-        <Button type="submit" disabled={!selectedFile || isBusy}>
-          <ImagePlus size={16} />
-          Upload image
-        </Button>
-      </form>
-      {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
-      <div className="property-image-list">
-        {images.length ? (
-          images.map((image) => (
-            <article className="property-image-row" key={image.id}>
-              <img src={image.url} alt={image.alt ?? "Property"} />
-              <div>
-                <strong>{image.alt || "No alt text"}</strong>
-                <span>Order {image.displayOrder}</span>
-                {image.isCover ? <StatusBadge tone="success">Cover</StatusBadge> : null}
-              </div>
-              <div className="property-image-actions">
+      <div className="property-image-management-grid">
+        <aside className="property-image-upload-card">
+          <form className="property-image-upload" onSubmit={handleSubmit}>
+            <div className="property-upload-zone">
+              <FileUploader
+                accept="image/*"
+                onFilesSelected={(files) => setSelectedFile(files[0] ?? null)}
+              />
+              <strong>Drag & drop image files here</strong>
+              <span>or choose a local image to upload.</span>
+            </div>
+            <Input
+              label="Alt text"
+              value={altText}
+              onChange={(event) => setAltText(event.target.value)}
+              placeholder="Describe the uploaded image"
+            />
+            <Input
+              label="Display order"
+              type="number"
+              min={0}
+              value={displayOrder}
+              onChange={(event) => setDisplayOrder(event.target.value)}
+            />
+            <Button type="submit" disabled={!selectedFile || isBusy}>
+              <ImagePlus size={16} />
+              Upload image
+            </Button>
+          </form>
+          {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
+          <div className="property-storage-usage">
+            <div>
+              <span>Storage Usage</span>
+              <strong>{storageUsedBytes ? `${storageUsedMb.toFixed(2)} MB used` : "No image size returned"}</strong>
+            </div>
+            <progress value={storageUsedBytes ? 1 : 0} max={1} />
+            <small>Storage limit is not returned by the property images API.</small>
+          </div>
+        </aside>
+        <div className="property-image-list">
+          {images.length ? (
+            images.map((image) => (
+              <article className="property-image-row" key={image.id}>
+                <img src={image.url} alt={image.alt ?? "Property"} />
+                <div>
+                  <strong>{image.fileName || image.alt || "Property image"}</strong>
+                  <span>Order {image.displayOrder}</span>
+                  {image.isCover ? <StatusBadge tone="success">Cover</StatusBadge> : null}
+                </div>
                 <Input
                   label="Alt text"
                   value={getMetadataDraft(image).altText}
@@ -294,48 +330,49 @@ function ImageManagementPanel({
                   value={getMetadataDraft(image).displayOrder}
                   onChange={(event) => updateMetadataDraft(image.id, "displayOrder", event.target.value)}
                 />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    const draft = getMetadataDraft(image);
-                    onUpdateMetadata(image.id, {
-                      altText: draft.altText,
-                      displayOrder: Number(draft.displayOrder || 0)
-                    });
-                  }}
-                  disabled={isBusy}
-                >
-                  Save metadata
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onSetCover(image.id)}
-                  disabled={image.isCover || isBusy}
-                >
-                  <Star size={16} />
-                  Set cover
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => onDelete(image.id)}
-                  disabled={isBusy}
-                >
-                  <Trash2 size={16} />
-                  Delete
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => analysisMutation.mutate(image)}
-                  disabled={analysisMutation.isPending}
-                >
-                  <Sparkles size={16} />
-                  Analyze
-                </Button>
-              </div>
+                <div className="property-image-actions">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const draft = getMetadataDraft(image);
+                      onUpdateMetadata(image.id, {
+                        altText: draft.altText,
+                        displayOrder: Number(draft.displayOrder || 0)
+                      });
+                    }}
+                    disabled={isBusy}
+                  >
+                    Save metadata
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onSetCover(image.id)}
+                    disabled={image.isCover || isBusy}
+                  >
+                    <Star size={16} />
+                    Set cover
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => onDelete(image.id)}
+                    disabled={isBusy}
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => analysisMutation.mutate(image)}
+                    disabled={analysisMutation.isPending}
+                  >
+                    <Sparkles size={16} />
+                    Analyze
+                  </Button>
+                </div>
               {analysisByImage[String(image.id)] ? (
                 <div className="property-image-ai-suggestion">
                   <div>
@@ -384,12 +421,13 @@ function ImageManagementPanel({
                     </Button>
                   </div>
                 </div>
-              ) : null}
-            </article>
-          ))
-        ) : (
-          <EmptyState title="No images" description="Upload property images before publishing workflows." />
-        )}
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <EmptyState title="No images" description="Upload property images before publishing workflows." />
+          )}
+        </div>
       </div>
       {images.length > 1 ? (
         <div className="property-image-actions">
@@ -419,6 +457,8 @@ function ImageManagementPanel({
 
 const legalDocumentTypeOptions = [
   { label: "Pink book", value: "PINK_BOOK" },
+  { label: "Red book", value: "RED_BOOK" },
+  { label: "Ownership certificate", value: "OWNERSHIP_CERTIFICATE" },
   { label: "Land use certificate", value: "LAND_USE_CERTIFICATE" },
   { label: "Sale contract", value: "SALE_CONTRACT" },
   { label: "Construction permit", value: "CONSTRUCTION_PERMIT" },
@@ -426,9 +466,9 @@ const legalDocumentTypeOptions = [
 ];
 
 const verificationStatusOptions = [
+  { label: "Unverified", value: "UNVERIFIED" },
   { label: "Verified", value: "VERIFIED" },
-  { label: "Rejected", value: "REJECTED" },
-  { label: "Pending", value: "PENDING" }
+  { label: "Rejected", value: "REJECTED" }
 ];
 
 function legalStatusTone(status: string) {
@@ -445,6 +485,169 @@ function legalStatusTone(status: string) {
 
 function hasAnyRole(roles: string[], allowedRoles: string[]) {
   return roles.some((role) => allowedRoles.includes(role));
+}
+
+const propertyTabs = ["Overview", "Images", "Legal Documents", "Amenities", "History"] as const;
+type PropertyTab = (typeof propertyTabs)[number];
+
+function PropertyHeroGallery({ images, propertyName }: { images: PropertyImage[]; propertyName: string }) {
+  const cover = images.find((image) => image.isCover) ?? images[0];
+  const thumbnails = images.filter((image) => image.id !== cover?.id).slice(0, 4);
+
+  if (!cover) {
+    return <EmptyState title="No images" description="Images added to this property will appear here." />;
+  }
+
+  return (
+    <section className="property-hero-gallery">
+      <figure className="property-hero-image">
+        <img src={cover.url} alt={cover.alt ?? propertyName} />
+        <span className="property-view-all-images">View All ({images.length})</span>
+      </figure>
+      <div className="property-thumbnail-grid">
+        {thumbnails.map((image) => (
+          <figure key={image.id}>
+            <img src={image.url} alt={image.alt ?? propertyName} />
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FactItem({
+  icon,
+  label,
+  value
+}: {
+  icon?: ReactNode;
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div>
+      <span className="property-fact-label">
+        {icon}
+        {label}
+      </span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function groupAmenities(amenities: PropertyRecord["amenities"]) {
+  return amenities.reduce<Record<string, PropertyRecord["amenities"]>>((groups, amenity) => {
+    const category = amenity.category ? enumLabel(amenity.category) : "Other";
+    groups[category] = [...(groups[category] ?? []), amenity];
+    return groups;
+  }, {});
+}
+
+function AmenityIcon({ category }: { category?: string }) {
+  if (/SECURITY/i.test(category ?? "")) {
+    return <CheckCircle2 size={15} />;
+  }
+
+  if (/ACCESS|BUILDING|COMMUNITY/i.test(category ?? "")) {
+    return <Building2 size={15} />;
+  }
+
+  return <Home size={15} />;
+}
+
+function PropertySidebar({
+  linkedContracts,
+  linkedListings,
+  property
+}: {
+  linkedContracts: ContractRecord[];
+  linkedListings: ListingRecord[];
+  property: PropertyRecord;
+}) {
+  return (
+    <aside className="property-overview-side">
+      <section className="content-section property-map-card">
+        <div className="property-side-card-header">
+          <h2>Location</h2>
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+              property.address.latitude && property.address.longitude
+                ? `${property.address.latitude},${property.address.longitude}`
+                : property.address.fullAddress
+            )}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View Map
+          </a>
+        </div>
+        <div className="property-map-body">
+          <MapPin size={22} />
+          <strong>{property.address.streetAddress || property.address.fullAddress}</strong>
+          {property.address.streetAddress ? <span>{property.address.fullAddress}</span> : null}
+          <span>{property.address.latitude && property.address.longitude ? `${property.address.latitude}, ${property.address.longitude}` : "Coordinates updating"}</span>
+        </div>
+      </section>
+      <section className="content-section property-linked-entities">
+        <div className="property-side-card-header">
+          <h2>Linked Entities</h2>
+          <Link to={`/listings/new?propertyId=${encodeURIComponent(String(property.id))}`}>New Listing</Link>
+        </div>
+        <div className="property-linked-list">
+          {linkedListings.map((listing) => (
+            <Link key={`listing-${listing.id}`} to={`/listings/${listing.id}`}>
+              <FilePlus2 size={17} />
+              <span>
+                <strong>{listing.title}</strong>
+                <small>{listing.code} / {labelStatus(listing.status)}</small>
+              </span>
+              <ChevronRight size={16} />
+            </Link>
+          ))}
+          {linkedContracts.map((contract) => (
+            <Link key={`contract-${contract.id}`} to={`/contracts/${contract.id}`}>
+              <FileText size={17} />
+              <span>
+                <strong>{contract.title}</strong>
+                <small>{contract.code} / {labelStatus(contract.status)}</small>
+              </span>
+              <ChevronRight size={16} />
+            </Link>
+          ))}
+          {!linkedListings.length && !linkedContracts.length ? (
+            <p className="muted">No linked listings or contracts returned by the API.</p>
+          ) : null}
+        </div>
+      </section>
+      <section className="content-section property-side-panel property-people-panel">
+        <h2>People</h2>
+        <PersonBlock icon="owner" label="Owner" person={property.owner} />
+        <PersonBlock icon="agent" label="Assigned agent" person={property.assignedAgent} />
+      </section>
+      <section className="content-section property-side-panel">
+        <h2>Amenities</h2>
+        {property.amenities.length ? (
+          <div className="property-amenity-groups">
+            {Object.entries(groupAmenities(property.amenities)).map(([category, amenities]) => (
+              <div key={category}>
+                <strong>{category}</strong>
+                <div className="property-amenity-list">
+                  {amenities.slice(0, 6).map((amenity) => (
+                    <span key={amenity.id}>
+                      <AmenityIcon category={amenity.category} />
+                      {amenity.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No amenities returned by the property API.</p>
+        )}
+      </section>
+    </aside>
+  );
 }
 
 function LegalDocumentsPanel({
@@ -466,6 +669,7 @@ function LegalDocumentsPanel({
   const [documentType, setDocumentType] = useState("PINK_BOOK");
   const [documentNumber, setDocumentNumber] = useState("");
   const [issuedBy, setIssuedBy] = useState("");
+  const [isIssuedByFocused, setIsIssuedByFocused] = useState(false);
   const [issuedDate, setIssuedDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -474,6 +678,12 @@ function LegalDocumentsPanel({
     documentType: "PINK_BOOK"
   });
   const [verificationDrafts, setVerificationDrafts] = useState<Record<string, string>>({});
+  const issuedByQuery = useQuery({
+    enabled: issuedBy.trim().length > 0,
+    queryFn: () => searchAdminUsers({ keyword: issuedBy.trim(), page: 0, size: 8 }),
+    queryKey: ["property-legal-issued-by-users", issuedBy.trim()],
+    retry: 1
+  });
   const uploadMutation = useMutation({
     mutationFn: () => {
       if (!selectedFile) {
@@ -580,24 +790,64 @@ function LegalDocumentsPanel({
           uploadMutation.mutate();
         }}
       >
-        <FileUploader onFilesSelected={(files) => setSelectedFile(files[0] ?? null)} />
-        <Select
-          label="Document type"
-          options={legalDocumentTypeOptions}
-          value={documentType}
-          onChange={(event) => setDocumentType(event.target.value)}
-        />
-        <Input label="Document number" value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} />
-        <Input label="Issued by" value={issuedBy} onChange={(event) => setIssuedBy(event.target.value)} />
-        <Input label="Issued date" type="date" value={issuedDate} onChange={(event) => setIssuedDate(event.target.value)} />
-        <Input label="Expiry date" type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} />
-        <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-        <Button type="submit" disabled={!selectedFile || uploadMutation.isPending}>
-          <FilePlus2 size={16} />
-          Upload document
-        </Button>
+        <div className="legal-document-dropzone">
+          <FileUploader onFilesSelected={(files) => setSelectedFile(files[0] ?? null)} />
+          <strong>Drag & drop legal document here</strong>
+          <span>Upload ownership, certificate, permit, or sale contract files.</span>
+          {selectedFile ? <small>Selected: {selectedFile.name}</small> : null}
+        </div>
+        <div className="legal-document-upload-fields">
+          <Select
+            label="Document type"
+            options={legalDocumentTypeOptions}
+            value={documentType}
+            onChange={(event) => setDocumentType(event.target.value)}
+          />
+          <Input label="Document number" value={documentNumber} onChange={(event) => setDocumentNumber(event.target.value)} />
+          <div className="legal-issued-by-picker">
+            <label className="field">
+              <span>Issued by</span>
+              <span className="legal-issued-by-input">
+                <UserRound size={15} />
+                <input
+                  className="input"
+                  value={issuedBy}
+                  placeholder="Search issuing user"
+                  onBlur={() => window.setTimeout(() => setIsIssuedByFocused(false), 140)}
+                  onChange={(event) => setIssuedBy(event.target.value)}
+                  onFocus={() => setIsIssuedByFocused(true)}
+                />
+              </span>
+            </label>
+            {isIssuedByFocused && issuedBy.trim() ? (
+              <div className="legal-issued-by-suggestions">
+                {issuedByQuery.isLoading ? <span>Searching users...</span> : null}
+                {issuedByQuery.data?.content.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => {
+                      setIssuedBy(user.email ? `${user.fullName} / ${user.email}` : user.fullName);
+                      setIsIssuedByFocused(false);
+                    }}
+                  >
+                    <strong>{user.fullName}</strong>
+                    <small>{user.email || `User #${user.id}`}</small>
+                  </button>
+                ))}
+                {!issuedByQuery.isLoading && !issuedByQuery.data?.content.length ? <span>No matching users.</span> : null}
+              </div>
+            ) : null}
+          </div>
+          <Input label="Issued date" type="date" value={issuedDate} onChange={(event) => setIssuedDate(event.target.value)} />
+          <Input label="Expiry date" type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} />
+          <Input label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+          <Button type="submit" disabled={!selectedFile || uploadMutation.isPending}>
+            <FilePlus2 size={16} />
+            Upload document
+          </Button>
+        </div>
       </form>
-      {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
       {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
       {isLoading ? <EmptyState title="Loading legal documents" description="Checking property document records." /> : null}
       {!isLoading ? (
@@ -751,6 +1001,7 @@ export function PropertyDetailPage() {
   const [nextStatus, setNextStatus] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
   const [isDeletePropertyOpen, setIsDeletePropertyOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<PropertyTab>("Overview");
   const propertyQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getProperty(id ?? ""),
@@ -767,6 +1018,18 @@ export function PropertyDetailPage() {
     enabled: Boolean(id),
     queryFn: () => getPropertyLegalDocuments(id ?? ""),
     queryKey: ["property", id, "legal-documents"],
+    retry: 1
+  });
+  const linkedListingsQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => searchListings({ page: 0, propertyId: id ?? "", size: 3 }),
+    queryKey: ["property", id, "linked-listings"],
+    retry: 1
+  });
+  const linkedContractsQuery = useQuery({
+    enabled: Boolean(id),
+    queryFn: () => searchContracts({ page: 0, propertyId: id ?? "", size: 3 }),
+    queryKey: ["property", id, "linked-contracts"],
     retry: 1
   });
   const normalizedError = propertyQuery.error
@@ -843,6 +1106,8 @@ export function PropertyDetailPage() {
     metadataMutation.isPending ||
     reorderMutation.isPending;
   const selectedStatus = nextStatus || property?.status || "";
+  const linkedListings = linkedListingsQuery.data?.content ?? [];
+  const linkedContracts = linkedContractsQuery.data?.content ?? [];
 
   if (!id) {
     return (
@@ -853,13 +1118,7 @@ export function PropertyDetailPage() {
   }
 
   return (
-    <section>
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/properties">
-          <ArrowLeft size={16} />
-          Back to properties
-        </Link>
-      </Button>
+    <section className="property-detail-page">
       {propertyQuery.isLoading ? (
         <div className="detail-skeleton">
           <div />
@@ -876,130 +1135,140 @@ export function PropertyDetailPage() {
       ) : null}
       {property ? (
         <>
+          <nav className="property-breadcrumb" aria-label="Breadcrumb">
+            <Link to="/properties">Properties</Link>
+            <ChevronRight size={15} />
+            <strong>{property.code}</strong>
+          </nav>
           <div className="detail-header">
             <div>
-              <div className="detail-badges">
-                <StatusBadge tone={statusTone(property.status)}>
-                  {labelStatus(property.status)}
-                </StatusBadge>
-                {property.purpose ? (
-                  <StatusBadge tone="info">
-                    {property.purpose === "SALE" ? "For sale" : "For rent"}
-                  </StatusBadge>
-                ) : null}
-              </div>
-              <h1>{property.name}</h1>
-              <p className="muted">
-                <MapPin size={16} />
-                {property.address.fullAddress}
+              <PropertyTitleStatus property={property} />
+              <p className="property-detail-subtitle">
+                {property.code} &bull; {property.address.fullAddress}
+                {property.purpose ? ` &bull; ${property.purpose === "SALE" ? "For sale" : "For rent"}` : ""}
               </p>
             </div>
-            <div className="property-price-block">
-              <span>Price</span>
-              <strong>
-                {property.price ? formatCurrency(property.price, property.currency) : "Updating"}
-              </strong>
+            <div className="property-header-actions">
               <Button asChild variant="secondary" size="sm">
                 <Link to={`/properties/${property.id}/edit`}>
                   <Edit size={16} />
                   Edit
                 </Link>
               </Button>
-              <Button asChild size="sm">
-                <Link to={`/listings/new?propertyId=${encodeURIComponent(String(property.id))}`}>
-                  <FilePlus2 size={16} />
-                  Create listing
-                </Link>
+              <Button variant="secondary" size="sm" onClick={() => setActiveTab("History")}>
+                <CheckCircle2 size={16} />
+                Change Status
               </Button>
               <Button
-                variant="danger"
+                className="property-delete-icon"
+                variant="ghost"
                 size="sm"
+                aria-label="Delete property"
                 onClick={() => setIsDeletePropertyOpen(true)}
                 disabled={deletePropertyMutation.isPending}
               >
                 <Trash2 size={16} />
-                Delete
               </Button>
             </div>
           </div>
-          <ImageGallery images={images} />
-          <ImageManagementPanel
-            images={images}
-            isBusy={imageActionBusy}
-            onUpload={(request) => uploadMutation.mutate(request)}
-            onDelete={(imageId) => deleteMutation.mutate(imageId)}
-            onReorder={(items) => reorderMutation.mutate(items)}
-            onSetCover={(imageId) => coverMutation.mutate(imageId)}
-            onUpdateMetadata={(imageId, request) => metadataMutation.mutate({ imageId, request })}
-            propertyId={property.id}
-          />
-          <LegalDocumentsPanel
-            documents={legalDocumentsQuery.data ?? []}
-            isLoading={legalDocumentsQuery.isLoading}
-            onChanged={invalidatePropertyData}
-            propertyId={property.id}
-            roles={user?.roles ?? []}
-          />
+          <PropertyHeroGallery images={images} propertyName={property.name} />
+          <nav className="property-tabs" aria-label="Property sections">
+            {propertyTabs.map((tab) => (
+              <button
+                className={activeTab === tab ? "is-active" : ""}
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
           {normalizedActionError ? (
             <div className="form-error" role="alert">
               {normalizedActionError.message}
             </div>
           ) : null}
-          <div className="detail-grid">
-            <section className="content-section detail-main-section">
-              <div className="property-fact-grid">
-                <div>
-                  <Ruler size={18} />
-                  <span>Floor area</span>
-                  <strong>{formatArea(property.floorArea)}</strong>
+          {activeTab === "Overview" ? (
+            <div className="property-overview-layout">
+              <main className="property-overview-main">
+                <section className="content-section detail-main-section property-key-facts-card">
+                  <div className="section-header compact">
+                    <h3>Key Facts</h3>
+                  </div>
+                  <div className="property-fact-grid">
+                    <FactItem icon={<DollarSign size={16} />} label="Price" value={property.price ? formatCurrency(property.price, property.currency) : "Updating"} />
+                    <FactItem icon={<Building2 size={16} />} label="Property type" value={property.propertyTypeName || "Updating"} />
+                    <FactItem icon={<Ruler size={18} />} label="Floor area" value={formatArea(property.floorArea)} />
+                    <FactItem icon={<Home size={18} />} label="Land area" value={formatArea(property.landArea)} />
+                    <FactItem icon={<BedDouble size={18} />} label="Bedrooms" value={property.bedrooms ?? "Updating"} />
+                    <FactItem icon={<Bath size={18} />} label="Bathrooms" value={property.bathrooms ?? "Updating"} />
+                    <FactItem icon={<Tag size={16} />} label="Code" value={property.code} />
+                    <FactItem icon={<FileText size={16} />} label="Legal status" value={enumLabel(property.legalStatus)} />
+                    <FactItem icon={<Home size={16} />} label="Furniture status" value={enumLabel(property.furnitureStatus)} />
+                    <FactItem icon={<Compass size={16} />} label="Direction" value={enumLabel(property.direction)} />
+                    <FactItem icon={<CalendarDays size={16} />} label="Available from" value={property.availableFrom || "Updating"} />
+                  </div>
+                  <div className="property-description-block">
+                    <h3>Description</h3>
+                    <p>{property.description || "No description returned by the property API."}</p>
+                  </div>
+                </section>
+              </main>
+            </div>
+          ) : null}
+          {activeTab === "Images" ? (
+            <ImageManagementPanel
+              images={images}
+              isBusy={imageActionBusy}
+              onUpload={(request) => uploadMutation.mutate(request)}
+              onDelete={(imageId) => deleteMutation.mutate(imageId)}
+              onReorder={(items) => reorderMutation.mutate(items)}
+              onSetCover={(imageId) => coverMutation.mutate(imageId)}
+              onUpdateMetadata={(imageId, request) => metadataMutation.mutate({ imageId, request })}
+              propertyId={property.id}
+            />
+          ) : null}
+          {activeTab === "Legal Documents" ? (
+            <LegalDocumentsPanel
+              documents={legalDocumentsQuery.data ?? []}
+              isLoading={legalDocumentsQuery.isLoading}
+              onChanged={invalidatePropertyData}
+              propertyId={property.id}
+              roles={user?.roles ?? []}
+            />
+          ) : null}
+          {activeTab === "Amenities" ? (
+            <section className="content-section property-amenities-tab">
+              <div className="section-header compact">
+                <h3>Amenities</h3>
+              </div>
+              {property.amenities.length ? (
+                <div className="property-amenity-grid">
+                  {property.amenities.map((amenity) => (
+                    <article key={amenity.id}>
+                      <strong>{amenity.name}</strong>
+                      <span>{amenity.category || "Uncategorized"}</span>
+                      {amenity.details ? <p>{amenity.details}</p> : null}
+                    </article>
+                  ))}
                 </div>
-                <div>
-                  <Home size={18} />
-                  <span>Land area</span>
-                  <strong>{formatArea(property.landArea)}</strong>
-                </div>
-                <div>
-                  <BedDouble size={18} />
-                  <span>Bedrooms</span>
-                  <strong>{property.bedrooms ?? "Updating"}</strong>
-                </div>
-                <div>
-                  <Bath size={18} />
-                  <span>Bathrooms</span>
-                  <strong>{property.bathrooms ?? "Updating"}</strong>
-                </div>
+              ) : (
+                <EmptyState title="No amenities" description="Amenity data was not returned by the property API." />
+              )}
+            </section>
+          ) : null}
+          {activeTab === "History" ? (
+            <section className="content-section property-history-tab">
+              <div className="section-header compact">
+                <h3>History</h3>
               </div>
               <div className="property-detail-grid">
-                <div>
-                  <span>Code</span>
-                  <strong>{property.code}</strong>
-                </div>
-                <div>
-                  <span>Legal status</span>
-                  <strong>{enumLabel(property.legalStatus)}</strong>
-                </div>
-                <div>
-                  <span>Furniture status</span>
-                  <strong>{enumLabel(property.furnitureStatus)}</strong>
-                </div>
-                <div>
-                  <span>Direction</span>
-                  <strong>{enumLabel(property.direction)}</strong>
-                </div>
-                <div>
-                  <span>Latitude</span>
-                  <strong>{property.address.latitude ?? "Updating"}</strong>
-                </div>
-                <div>
-                  <span>Longitude</span>
-                  <strong>{property.address.longitude ?? "Updating"}</strong>
-                </div>
+                <FactItem label="Created by" value={property.createdByName || property.createdById || "Not returned"} />
+                <FactItem label="Created at" value={property.createdAt || "Not returned"} />
+                <FactItem label="Updated at" value={property.updatedAt || "Not returned"} />
+                <FactItem label="Status" value={labelStatus(property.status)} />
               </div>
-            </section>
-            <aside className="content-section property-side-panel">
-              <p className="eyebrow">People</p>
-              <PersonBlock icon="owner" label="Owner" person={property.owner} />
-              <PersonBlock icon="agent" label="Assigned agent" person={property.assignedAgent} />
               <div className="workflow-summary">
                 <p className="eyebrow">Status workflow</p>
                 <div className="status-action-form">
@@ -1024,8 +1293,13 @@ export function PropertyDetailPage() {
                   </div>
                 ))}
               </div>
-            </aside>
-          </div>
+            </section>
+          ) : null}
+          <PropertySidebar
+            linkedContracts={linkedContracts}
+            linkedListings={linkedListings}
+            property={property}
+          />
         </>
       ) : null}
       <ConfirmDialog

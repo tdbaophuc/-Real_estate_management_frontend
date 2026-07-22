@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowUpDown, Bath, BedDouble, Home, MapPin, Plus, Ruler, Search } from "lucide-react";
+import { ArrowUpDown, Bath, BedDouble, Home, MapPin, Plus, Ruler } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -13,6 +13,7 @@ import { Table, TableEmpty } from "../../shared/ui/Table";
 import { statusLabels } from "../../shared/constants/enumLabels";
 import { formatCurrency } from "../../shared/lib/format";
 import { useText } from "../../shared/i18n/useText";
+import { getPropertyTypes, getProvinces } from "../master-data/masterDataApi";
 import {
   searchProperties,
   type PropertyPurpose,
@@ -35,7 +36,8 @@ const statusOptions = [
   { label: "Reserved", value: "RESERVED" },
   { label: "Sold", value: "SOLD" },
   { label: "Rented", value: "RENTED" },
-  { label: "Inactive", value: "INACTIVE" }
+  { label: "Inactive", value: "INACTIVE" },
+  { label: "Deleted", value: "DELETED" }
 ];
 
 const sortOptions = [
@@ -47,6 +49,8 @@ const sortOptions = [
 
 type PropertyFilterState = {
   keyword: string;
+  location: string;
+  propertyTypeId: string;
   purpose: "" | PropertyPurpose;
   sort: string;
   status: string;
@@ -59,6 +63,8 @@ function getParam(searchParams: URLSearchParams, key: keyof PropertyFilterState)
 function getInitialFilterState(searchParams: URLSearchParams): PropertyFilterState {
   return {
     keyword: getParam(searchParams, "keyword"),
+    location: getParam(searchParams, "location"),
+    propertyTypeId: getParam(searchParams, "propertyTypeId"),
     purpose: getParam(searchParams, "purpose") as "" | PropertyPurpose,
     sort: getParam(searchParams, "sort") || sortOptions[0].value,
     status: getParam(searchParams, "status")
@@ -82,15 +88,17 @@ function buildSearchParams(filters: PropertyFilterState, page: number) {
 }
 
 function toApiParams(filters: PropertyFilterState, page: number): PropertySearchParams {
-  const [sortBy, sortDirection] = filters.sort.split(":") as [string, "ASC" | "DESC"];
+  const [sortBy, direction] = filters.sort.split(":") as [string, "ASC" | "DESC"];
 
   return {
     keyword: filters.keyword,
     page,
+    propertyTypeId: filters.propertyTypeId || undefined,
+    provinceId: filters.location || undefined,
     purpose: filters.purpose,
     size: pageSize,
     sortBy,
-    sortDirection,
+    direction,
     status: filters.status
   };
 }
@@ -199,6 +207,18 @@ export function PropertiesPage() {
     queryKey: ["properties", apiParams],
     retry: 1
   });
+  const propertyTypesQuery = useQuery({
+    queryFn: getPropertyTypes,
+    queryKey: ["master-data", "property-types"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const provincesQuery = useQuery({
+    queryFn: getProvinces,
+    queryKey: ["master-data", "provinces"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
   const normalizedError = propertiesQuery.error
     ? normalizeUnknownError(propertiesQuery.error)
     : null;
@@ -229,8 +249,17 @@ export function PropertiesPage() {
     setSearchParams(buildSearchParams(committedFilters, page));
   }
 
+  const locationOptions = [
+    { label: tx("Any location"), value: "" },
+    ...(provincesQuery.data ?? []).map((location) => ({ label: location.name, value: String(location.id) }))
+  ];
+  const propertyTypeOptions = [
+    { label: tx("Any type"), value: "" },
+    ...(propertyTypesQuery.data ?? []).map((type) => ({ label: type.name, value: String(type.id) }))
+  ];
+
   return (
-    <section>
+    <section className="property-library-page">
       <div className="section-header">
         <div>
           <p className="eyebrow">{tx("Properties")}</p>
@@ -252,11 +281,20 @@ export function PropertiesPage() {
           onChange={(event) => updateFilter("keyword", event.target.value)}
         />
         <Select
-          label={tx("Status")}
-          name="status"
-          options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))}
-          value={filters.status}
-          onChange={(event) => updateFilter("status", event.target.value)}
+          label={tx("Location")}
+          name="location"
+          options={locationOptions}
+          value={filters.location}
+          disabled={provincesQuery.isLoading}
+          onChange={(event) => updateFilter("location", event.target.value)}
+        />
+        <Select
+          label={tx("Type")}
+          name="propertyTypeId"
+          options={propertyTypeOptions}
+          value={filters.propertyTypeId}
+          disabled={propertyTypesQuery.isLoading}
+          onChange={(event) => updateFilter("propertyTypeId", event.target.value)}
         />
         <Select
           label={tx("Purpose")}
@@ -266,19 +304,18 @@ export function PropertiesPage() {
           onChange={(event) => updateFilter("purpose", event.target.value)}
         />
         <Select
-          label={tx("Sort")}
-          name="sort"
-          options={sortOptions.map((option) => ({ ...option, label: tx(option.label) }))}
-          value={filters.sort}
-          onChange={(event) => updateFilter("sort", event.target.value)}
+          label={tx("Status")}
+          name="status"
+          options={statusOptions.map((option) => ({ ...option, label: tx(option.label) }))}
+          value={filters.status}
+          onChange={(event) => updateFilter("status", event.target.value)}
         />
         <div className="filter-actions">
-          <Button type="submit" disabled={propertiesQuery.isFetching}>
-            <Search size={16} />
-            {tx("Search")}
-          </Button>
           <Button type="button" variant="secondary" onClick={resetSearch}>
-            {tx("Reset")}
+            {tx("Clear Filters")}
+          </Button>
+          <Button type="submit" disabled={propertiesQuery.isFetching}>
+            {tx("Apply")}
           </Button>
         </div>
       </form>
@@ -321,7 +358,7 @@ export function PropertiesPage() {
       ) : null}
       {propertiesQuery.data && propertiesQuery.data.content.length > 0 ? (
         <>
-          <div className="property-table-desktop">
+          <div className="property-table-desktop content-section">
             <Table>
               <thead>
                 <tr>
@@ -340,8 +377,8 @@ export function PropertiesPage() {
                   {propertiesQuery.data.content.map((property) => (
                     <tr key={property.id}>
                       <td>
+                        <Link className="property-code-link" to={`/properties/${property.id}`}>{property.code}</Link>
                         <strong>{property.name}</strong>
-                        <small>{property.code}</small>
                         <p className="muted">
                           <MapPin size={14} />
                           {property.address.fullAddress}
@@ -353,16 +390,14 @@ export function PropertiesPage() {
                         </StatusBadge>
                       </td>
                       <td>{property.purpose ? tx(property.purpose === "SALE" ? "Sale" : "Rent") : tx("Updating")}</td>
-                      <td>{property.price ? formatCurrency(property.price, property.currency) : tx("Updating")}</td>
+                      <td className="property-price-cell">{property.price ? formatCurrency(property.price, property.currency) : tx("Updating")}</td>
                       <td>{formatArea(property)}</td>
                       <td>
                         {property.bedrooms ?? "-"} bed / {property.bathrooms ?? "-"} bath
                       </td>
                       <td>{property.assignedAgent?.fullName ?? tx("Unassigned")}</td>
                       <td>
-                        <Button asChild variant="secondary" size="sm">
-                          <Link to={`/properties/${property.id}`}>{tx("View")}</Link>
-                        </Button>
+                        <Link className="property-view-link" to={`/properties/${property.id}`}>{tx("View")}</Link>
                       </td>
                     </tr>
                   ))}
