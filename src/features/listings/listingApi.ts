@@ -12,9 +12,16 @@ export type ListingPerson = {
 
 export type ListingPropertySummary = {
   address?: string;
+  bathrooms?: number | null;
+  bedrooms?: number | null;
   code: string;
+  currency?: string;
+  floorArea?: number | null;
   id: number | string;
+  landArea?: number | null;
   name: string;
+  price?: number | null;
+  propertyTypeName?: string;
 };
 
 export type ListingPackageSummary = {
@@ -24,6 +31,7 @@ export type ListingPackageSummary = {
 };
 
 export type ListingStatusHistory = {
+  changedBy: ListingPerson | null;
   createdAt: string;
   fromStatus?: string;
   id: number | string;
@@ -46,6 +54,8 @@ export type ListingRecord = {
   propertyId: number | null;
   property: ListingPropertySummary | null;
   purpose: ListingPurpose | null;
+  publishedAt: string;
+  rejectionReason: string;
   reviewedAt: string;
   reviewer: ListingPerson | null;
   seoDescription: string;
@@ -56,9 +66,12 @@ export type ListingRecord = {
   statusHistory: ListingStatusHistory[];
   submittedAt: string;
   title: string;
+  unpublishedAt: string;
   updatedAt: string;
   visibility: ListingVisibility | string;
   viewCount: number | null;
+  expiresAt: string;
+  featuredUntil: string;
 };
 
 export type ListingWorkflowAction = "approve" | "publish" | "reject" | "submit" | "unpublish";
@@ -91,9 +104,7 @@ export type ListingCreateRequest = {
   visibility: ListingVisibility;
 };
 
-export type ListingUpdateRequest = Omit<ListingCreateRequest, "propertyId"> & {
-  propertyId?: number;
-};
+export type ListingUpdateRequest = Omit<ListingCreateRequest, "code" | "propertyId">;
 
 export type ListingDescriptionRequest = {
   language: string;
@@ -185,6 +196,21 @@ function readPerson(source: BackendRecord | null): ListingPerson | null {
   };
 }
 
+function readFlatPerson(source: BackendRecord, idKeys: string[], nameKeys: string[], emailKeys: string[] = []) {
+  const id = readNumber(source, idKeys);
+  const fullName = readString(source, nameKeys);
+
+  if (!fullName) {
+    return null;
+  }
+
+  return {
+    email: readString(source, emailKeys) || undefined,
+    fullName,
+    id
+  } satisfies ListingPerson;
+}
+
 function readPropertySummary(source: BackendRecord | null): ListingPropertySummary | null {
   if (!source) {
     return null;
@@ -198,9 +224,30 @@ function readPropertySummary(source: BackendRecord | null): ListingPropertySumma
 
   return {
     address: readString(source, ["address", "fullAddress", "addressLine", "streetAddress"]) || undefined,
+    bathrooms: readNumber(source, ["bathrooms"]),
+    bedrooms: readNumber(source, ["bedrooms"]),
     code: readString(source, ["code"], String(id)),
+    currency: readString(source, ["currency"]) || undefined,
+    floorArea: readNumber(source, ["floorArea", "totalArea"]),
     id,
-    name: readString(source, ["name", "title"], readString(source, ["code"], String(id)))
+    landArea: readNumber(source, ["landArea"]),
+    name: readString(source, ["name", "title"], readString(source, ["code"], String(id))),
+    price: readNumber(source, ["price"]),
+    propertyTypeName: readString(source, ["propertyTypeName", "typeName"]) || undefined
+  };
+}
+
+function readFlatPropertySummary(source: BackendRecord): ListingPropertySummary | null {
+  const id = readNumber(source, ["propertyId"]) ?? readString(source, ["propertyId"]);
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    code: readString(source, ["propertyCode"], String(id)),
+    id,
+    name: readString(source, ["propertyName"], readString(source, ["propertyCode"], String(id)))
   };
 }
 
@@ -220,6 +267,7 @@ function readListingPackage(source: BackendRecord | null): ListingPackageSummary
 
 function normalizeStatusHistory(source: BackendRecord, index = 0): ListingStatusHistory {
   return {
+    changedBy: readPerson(readNestedRecord(source, "changedBy")),
     createdAt: readString(source, ["createdAt", "changedAt", "timestamp"]),
     fromStatus: readString(source, ["fromStatus", "previousStatus"]) || undefined,
     id: readNumber(source, ["id", "historyId"]) ?? readString(source, ["id", "historyId"], String(index)),
@@ -231,7 +279,7 @@ function normalizeStatusHistory(source: BackendRecord, index = 0): ListingStatus
 
 export function normalizeListing(source: BackendRecord): ListingRecord {
   const id = readNumber(source, ["id", "listingId"]) ?? readString(source, ["id", "listingId"]);
-  const property = readPropertySummary(readNestedRecord(source, "property"));
+  const property = readPropertySummary(readNestedRecord(source, "property")) ?? readFlatPropertySummary(source);
   const listingPackage = readListingPackage(
     readNestedRecord(source, "listingPackage") ?? readNestedRecord(source, "package")
   );
@@ -240,7 +288,9 @@ export function normalizeListing(source: BackendRecord): ListingRecord {
     askingPrice: readNumber(source, ["askingPrice", "price"]),
     code: readString(source, ["code"], String(id || "LISTING")),
     createdAt: readString(source, ["createdAt"]),
-    creator: readPerson(readNestedRecord(source, "creator") ?? readNestedRecord(source, "createdBy")),
+    creator:
+      readPerson(readNestedRecord(source, "creator") ?? readNestedRecord(source, "createdBy")) ??
+      readFlatPerson(source, ["createdById", "creatorId"], ["createdByName", "creatorName"], ["createdByEmail", "creatorEmail"]),
     currency: readString(source, ["currency"], "VND"),
     description: readString(source, ["description"]),
     favoriteCount: readNumber(source, ["favoriteCount", "favorites"]),
@@ -250,8 +300,12 @@ export function normalizeListing(source: BackendRecord): ListingRecord {
     property,
     propertyId: readNumber(source, ["propertyId"]) ?? (typeof property?.id === "number" ? property.id : null),
     purpose: readPurpose(readString(source, ["purpose"])),
+    publishedAt: readString(source, ["publishedAt"]),
+    rejectionReason: readString(source, ["rejectionReason"]),
     reviewedAt: readString(source, ["reviewedAt"]),
-    reviewer: readPerson(readNestedRecord(source, "reviewer")),
+    reviewer:
+      readPerson(readNestedRecord(source, "reviewer")) ??
+      readFlatPerson(source, ["reviewedById", "reviewerId"], ["reviewedByName", "reviewerName"], ["reviewedByEmail", "reviewerEmail"]),
     seoDescription: readString(source, ["seoDescription"]),
     seoKeywords: readString(source, ["seoKeywords"]),
     seoTitle: readString(source, ["seoTitle"]),
@@ -260,9 +314,12 @@ export function normalizeListing(source: BackendRecord): ListingRecord {
     statusHistory: readRecordArray(source, ["statusHistory", "histories"]).map(normalizeStatusHistory),
     submittedAt: readString(source, ["submittedAt"]),
     title: readString(source, ["title", "name"], "Untitled listing"),
+    unpublishedAt: readString(source, ["unpublishedAt"]),
     updatedAt: readString(source, ["updatedAt"]),
     visibility: readString(source, ["visibility"], "PUBLIC"),
-    viewCount: readNumber(source, ["viewCount", "views"])
+    viewCount: readNumber(source, ["viewCount", "views"]),
+    expiresAt: readString(source, ["expiresAt"]),
+    featuredUntil: readString(source, ["featuredUntil"])
   };
 }
 

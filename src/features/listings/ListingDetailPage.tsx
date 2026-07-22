@@ -1,18 +1,16 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock3,
   Edit,
   Eye,
-  FileText,
   Heart,
   Home,
-  Rocket,
-  Send,
-  Sparkles,
+  ImageIcon,
+  Ruler,
+  Tag,
   XCircle
 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
@@ -21,15 +19,13 @@ import { Button } from "../../shared/ui/Button";
 import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
-import { Timeline } from "../../shared/ui/Timeline";
 import { statusLabels } from "../../shared/constants/enumLabels";
-import { formatCurrency } from "../../shared/lib/format";
+import { formatCurrency, formatDate } from "../../shared/lib/format";
 import type { RoleCode } from "../../shared/types/auth";
+import { getPropertyImages, type PropertyImage } from "../properties/propertyApi";
 import {
-  generateListingDescription,
   getListing,
   runListingWorkflowAction,
-  type ListingDescriptionSuggestion,
   type ListingRecord,
   type ListingWorkflowAction
 } from "./listingApi";
@@ -42,8 +38,6 @@ const workflowActionLabels: Record<ListingWorkflowAction, string> = {
   unpublish: "Unpublish"
 };
 
-const workflowSteps = ["DRAFT", "PENDING_REVIEW", "APPROVED", "PUBLISHED"];
-
 function labelStatus(status: string) {
   return statusLabels[status as keyof typeof statusLabels] ?? status;
 }
@@ -53,11 +47,11 @@ function statusTone(status: string) {
     return "success";
   }
 
-  if (status === "PENDING_REVIEW" || status === "DRAFT") {
+  if (status === "PENDING_REVIEW") {
     return "warning";
   }
 
-  if (status === "REJECTED" || status === "UNPUBLISHED") {
+  if (status === "REJECTED") {
     return "danger";
   }
 
@@ -93,107 +87,78 @@ function getAvailableWorkflowActions(status: string, roles: RoleCode[]) {
   return actions;
 }
 
-function workflowIcon(action: ListingWorkflowAction) {
-  if (action === "submit") {
-    return <Send size={16} />;
-  }
-
-  if (action === "approve") {
-    return <CheckCircle2 size={16} />;
-  }
-
-  if (action === "reject") {
-    return <XCircle size={16} />;
-  }
-
-  return <Rocket size={16} />;
+function safeFormatDate(value: string) {
+  return value ? formatDate(value) : "-";
 }
 
-function workflowProgress(status: string) {
-  const activeIndex = workflowSteps.includes(status) ? workflowSteps.indexOf(status) : 0;
-
-  return workflowSteps.map((step, index) => ({
-    active: step === status,
-    complete: index <= activeIndex && !["REJECTED", "UNPUBLISHED"].includes(status),
-    label: labelStatus(step)
-  }));
+function avatarInitial(name?: string) {
+  return (name?.trim().charAt(0) || "?").toUpperCase();
 }
 
-function ListingMetric({
-  icon,
-  label,
-  value
-}: {
-  icon: ReactNode;
-  label: string;
-  value: ReactNode;
-}) {
+function ListingMediaGallery({ images, title }: { images: PropertyImage[]; title: string }) {
+  const orderedImages = [...images].sort((left, right) => {
+    if (left.isCover && !right.isCover) {
+      return -1;
+    }
+
+    if (!left.isCover && right.isCover) {
+      return 1;
+    }
+
+    return left.displayOrder - right.displayOrder;
+  });
+  const mainImage = orderedImages[0];
+  const thumbnails = orderedImages.slice(1, 4);
+
+  if (!mainImage) {
+    return (
+      <section className="listing-media-empty">
+        <ImageIcon size={28} />
+        <span>No property images returned by API.</span>
+      </section>
+    );
+  }
+
   return (
-    <div>
-      {icon}
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <section className="listing-media-block">
+      <div className="listing-media-main">
+        <img src={mainImage.url} alt={mainImage.alt || title} />
+        <span>View All ({orderedImages.length})</span>
+      </div>
+      <div className="listing-media-thumbnails">
+        {thumbnails.map((image) => (
+          <img key={image.id} src={image.url} alt={image.alt || title} />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function AiSuggestionPanel({
-  listing,
-  onGenerated,
-  suggestion
-}: {
-  listing: ListingRecord;
-  onGenerated: (suggestion: ListingDescriptionSuggestion) => void;
-  suggestion: ListingDescriptionSuggestion | null;
-}) {
-  const aiMutation = useMutation({
-    mutationFn: () =>
-      generateListingDescription({
-        language: "vi",
-        listingId: listing.id,
-        propertyId: listing.propertyId,
-        tone: "PROFESSIONAL"
-      }),
-    onSuccess: onGenerated
-  });
-  const aiError = aiMutation.error ? normalizeUnknownError(aiMutation.error) : null;
+function PropertyDetailStrip({ listing }: { listing: ListingRecord }) {
+  const floorArea = listing.property?.floorArea ?? listing.property?.landArea;
 
   return (
-    <section className="content-section listing-detail-ai">
-      <div className="section-header compact">
-        <div>
-          <p className="eyebrow">AI assist</p>
-          <h3>Listing description generator</h3>
-        </div>
-        <Button variant="secondary" onClick={() => aiMutation.mutate()} disabled={aiMutation.isPending}>
-          <Sparkles size={16} />
-          Generate
-        </Button>
+    <section className="listing-property-strip">
+      <div>
+        <Tag size={18} />
+        <span>Asset Type</span>
+        <strong>{listing.property?.propertyTypeName ?? "-"}</strong>
       </div>
-      <p className="muted">
-        Generate draft content from the listing and property context. Review before copying into the edit form.
-      </p>
-      {aiError ? <p className="form-alert">{aiError.message}</p> : null}
-      {suggestion ? (
-        <div className="ai-suggestion-results">
-          <article>
-            <span>Title</span>
-            <p>{suggestion.title || "No title suggestion"}</p>
-          </article>
-          <article>
-            <span>Description</span>
-            <p>{suggestion.description || suggestion.shortDescription || "No description suggestion"}</p>
-          </article>
-          <article>
-            <span>SEO</span>
-            <p>{[suggestion.seoTitle, suggestion.seoDescription, suggestion.seoKeywords].filter(Boolean).join(" / ") || "No SEO suggestion"}</p>
-          </article>
-          <article>
-            <span>Social caption</span>
-            <p>{suggestion.socialCaption || "No social caption suggestion"}</p>
-          </article>
-        </div>
-      ) : null}
+      <div>
+        <Ruler size={18} />
+        <span>Total RSF</span>
+        <strong>{floorArea ? `${floorArea.toLocaleString("vi-VN")} m2` : "-"}</strong>
+      </div>
+      <div>
+        <Home size={18} />
+        <span>Asking Rate</span>
+        <strong>{listing.askingPrice ? formatCurrency(listing.askingPrice, listing.currency) : "-"}</strong>
+      </div>
+      <div>
+        <CheckCircle2 size={18} />
+        <span>Lease Type</span>
+        <strong>{listing.purpose ?? "-"}</strong>
+      </div>
     </section>
   );
 }
@@ -204,7 +169,7 @@ export function ListingDetailPage() {
   const queryClient = useQueryClient();
   const [pendingAction, setPendingAction] = useState<ListingWorkflowAction | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState<ListingDescriptionSuggestion | null>(null);
+  const [publicPreview, setPublicPreview] = useState(false);
   const listingQuery = useQuery({
     enabled: Boolean(id),
     queryFn: () => getListing(id ?? ""),
@@ -212,6 +177,12 @@ export function ListingDetailPage() {
     retry: 1
   });
   const listing = listingQuery.data;
+  const imagesQuery = useQuery({
+    enabled: Boolean(listing?.propertyId),
+    queryFn: () => getPropertyImages(listing?.propertyId ?? ""),
+    queryKey: ["property-images", listing?.propertyId],
+    retry: 1
+  });
   const availableActions = useMemo(
     () => (listing ? getAvailableWorkflowActions(listing.status, user?.roles ?? []) : []),
     [listing, user?.roles]
@@ -251,7 +222,7 @@ export function ListingDetailPage() {
   }
 
   return (
-    <section>
+    <section className="listing-detail-page">
       <Button asChild variant="ghost" size="sm">
         <Link to="/listings">
           <ArrowLeft size={16} />
@@ -276,122 +247,137 @@ export function ListingDetailPage() {
       ) : null}
       {listing ? (
         <>
-          <div className="detail-header listing-detail-hero">
+          <div className="listing-detail-header">
             <div>
-              <div className="detail-badges">
+              <p className="eyebrow">{listing.code}</p>
+              <div className="listing-detail-title-row">
+                <h1>{listing.title}</h1>
                 <StatusBadge tone={statusTone(listing.status)}>{labelStatus(listing.status)}</StatusBadge>
-                <StatusBadge tone="info">{listing.visibility}</StatusBadge>
               </div>
-              <h1>{listing.title}</h1>
               <p className="muted">
-                {listing.code} / {listing.slug || "slug pending"} / {listing.property?.name ?? `Property #${listing.propertyId ?? "n/a"}`}
+                {listing.property?.code ?? `Property #${listing.propertyId ?? "n/a"}`} • {listing.property?.address || listing.property?.name || listing.slug}
               </p>
             </div>
-            <div className="property-price-block">
-              <span>Asking price</span>
-              <strong>{listing.askingPrice ? formatCurrency(listing.askingPrice, listing.currency) : "Updating"}</strong>
-              <Button asChild variant="secondary" size="sm">
+            <div className="listing-detail-actions">
+              <label className="listing-preview-toggle">
+                <input type="checkbox" checked={publicPreview} onChange={(event) => setPublicPreview(event.target.checked)} />
+                <span>Preview Public View</span>
+              </label>
+              {availableActions.includes("reject") ? (
+                <Button variant="danger" onClick={() => setPendingAction("reject")} disabled={workflowMutation.isPending}>
+                  <XCircle size={16} />
+                  Reject
+                </Button>
+              ) : null}
+              {availableActions.includes("approve") ? (
+                <Button onClick={() => setPendingAction("approve")} disabled={workflowMutation.isPending}>
+                  <CheckCircle2 size={16} />
+                  Approve
+                </Button>
+              ) : null}
+              <Button asChild variant="secondary">
                 <Link to={`/listings/${listing.id}/edit`}>
                   <Edit size={16} />
-                  Edit draft
+                  Edit
                 </Link>
               </Button>
             </div>
           </div>
           {actionError ? <p className="form-alert">{actionError.message}</p> : null}
-          <section className="content-section listing-action-panel">
-            <div className="section-header compact">
-              <div>
-                <p className="eyebrow">Workflow</p>
-                <h3>Review and publish lifecycle</h3>
-              </div>
-              <div className="listing-action-buttons">
-                {availableActions.length ? (
-                  availableActions.map((action) => (
-                    <Button
-                      key={action}
-                      variant={action === "reject" ? "danger" : "secondary"}
-                      disabled={workflowMutation.isPending}
-                      onClick={() => setPendingAction(action)}
-                    >
-                      {workflowIcon(action)}
-                      {workflowActionLabels[action]}
-                    </Button>
-                  ))
-                ) : (
-                  <p className="muted">No workflow action is available for your role and this status.</p>
-                )}
-              </div>
-            </div>
-            <div className="listing-workflow-track">
-              {workflowProgress(listing.status).map((step) => (
-                <div className={step.active ? "workflow-step active" : "workflow-step"} key={step.label}>
-                  <CheckCircle2 size={16} />
-                  <span>{step.label}</span>
+          <div className="listing-detail-layout">
+            <main className={publicPreview ? "listing-detail-main public-preview" : "listing-detail-main"}>
+              <ListingMediaGallery images={imagesQuery.data ?? []} title={listing.title} />
+              <PropertyDetailStrip listing={listing} />
+              <section className="listing-marketing-copy">
+                <p className="eyebrow">Marketing Text</p>
+                <h3>{listing.seoTitle || listing.title}</h3>
+                <p>{listing.description || "No listing description returned by API."}</p>
+                {listing.seoDescription || listing.seoKeywords ? (
+                  <div className="listing-seo-line">
+                    <span>{listing.seoDescription}</span>
+                    <small>{listing.seoKeywords}</small>
+                  </div>
+                ) : null}
+              </section>
+            </main>
+            <aside className="listing-detail-side">
+              <section className="listing-side-section">
+                <h3>Performance</h3>
+                <div className="listing-kpi-grid">
+                  <div>
+                    <Eye size={17} />
+                    <span>Views</span>
+                    <strong>{listing.viewCount ?? 0}</strong>
+                  </div>
+                  <div>
+                    <Heart size={17} />
+                    <span>Favorites</span>
+                    <strong>{listing.favoriteCount ?? 0}</strong>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </section>
-          <div className="listing-detail-grid">
-            <section className="content-section detail-main-section">
-              <div className="property-fact-grid">
-                <ListingMetric icon={<FileText size={18} />} label="Purpose" value={listing.purpose ?? "Updating"} />
-                <ListingMetric icon={<Eye size={18} />} label="Views" value={listing.viewCount ?? 0} />
-                <ListingMetric icon={<Heart size={18} />} label="Favorites" value={listing.favoriteCount ?? 0} />
-                <ListingMetric icon={<Clock3 size={18} />} label="Submitted" value={listing.submittedAt || "Not submitted"} />
-              </div>
-              <div>
-                <p className="eyebrow">Description</p>
-                <p>{listing.description || "Description is being updated."}</p>
-              </div>
-              <div className="property-detail-grid">
-                <div>
-                  <span>SEO title</span>
-                  <strong>{listing.seoTitle || "Updating"}</strong>
+              </section>
+              <section className="listing-side-section">
+                <h3>Team Roles</h3>
+                <div className="listing-team-card">
+                  <span>{avatarInitial(listing.creator?.fullName)}</span>
+                  <div>
+                    <small>Creator</small>
+                    <strong>{listing.creator?.fullName ?? "-"}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span>SEO keywords</span>
-                  <strong>{listing.seoKeywords || "Updating"}</strong>
+                <div className="listing-team-card">
+                  <span>{avatarInitial(listing.reviewer?.fullName)}</span>
+                  <div>
+                    <small>Reviewer</small>
+                    <strong>{listing.reviewer?.fullName ?? "-"}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span>Package</span>
-                  <strong>{listing.listingPackage?.name ?? listing.listingPackageId ?? "No package"}</strong>
+              </section>
+              <section className="listing-side-section">
+                <h3>Property Source</h3>
+                <div className="listing-team-card">
+                  <span><Home size={18} /></span>
+                  <div>
+                    <small>{listing.property?.code ?? `#${listing.propertyId ?? "-"}`}</small>
+                    <strong>{listing.property?.name ?? "-"}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span>Created by</span>
-                  <strong>{listing.creator?.fullName ?? "Updating"}</strong>
+                {listing.propertyId ? (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link to={`/properties/${listing.propertyId}`}>Open property</Link>
+                  </Button>
+                ) : null}
+              </section>
+              <section className="listing-side-section">
+                <h3>Workflow History</h3>
+                <div className="listing-timeline">
+                  {listing.statusHistory.length ? (
+                    listing.statusHistory.map((history) => (
+                      <article key={history.id}>
+                        <span />
+                        <div>
+                          <strong>{history.toStatus || history.status}</strong>
+                          <small>{safeFormatDate(history.createdAt)} • {history.changedBy?.fullName ?? "-"}</small>
+                          {history.reason ? <p>{history.reason}</p> : null}
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="muted">No workflow history returned by API.</p>
+                  )}
                 </div>
-              </div>
-            </section>
-            <aside className="content-section property-side-panel">
-              <p className="eyebrow">Property source</p>
-              <div className="property-person">
-                <Home size={18} />
-                <div>
-                  <span>{listing.property?.code ?? `#${listing.propertyId ?? "n/a"}`}</span>
-                  <strong>{listing.property?.name ?? "Property updating"}</strong>
-                  {listing.property?.address ? <small>{listing.property.address}</small> : null}
+              </section>
+              <section className="listing-side-section">
+                <h3>Dates</h3>
+                <div className="listing-date-list">
+                  <span>Submitted <strong>{safeFormatDate(listing.submittedAt)}</strong></span>
+                  <span>Reviewed <strong>{safeFormatDate(listing.reviewedAt)}</strong></span>
+                  <span>Published <strong>{safeFormatDate(listing.publishedAt)}</strong></span>
+                  <span>Updated <strong>{safeFormatDate(listing.updatedAt)}</strong></span>
                 </div>
-              </div>
-              {listing.propertyId ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link to={`/properties/${listing.propertyId}`}>Open property</Link>
-                </Button>
-              ) : null}
-              <Timeline
-                items={listing.statusHistory.map((history) => ({
-                  description: history.reason,
-                  meta: history.createdAt || undefined,
-                  title: history.toStatus || history.status
-                }))}
-              />
+              </section>
             </aside>
           </div>
-          <AiSuggestionPanel
-            listing={listing}
-            suggestion={aiSuggestion}
-            onGenerated={setAiSuggestion}
-          />
         </>
       ) : null}
       <Dialog
