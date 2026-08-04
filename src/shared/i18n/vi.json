@@ -81,6 +81,7 @@
   },
   "navigation": {
     "account": "Tài khoản",
+    "admin": "Quản trị",
     "adminUsers": "Người dùng quản trị",
     "aiAssistant": "Trợ lý AI",
     "appointments": "Lịch hẹn",
@@ -97,7 +98,10 @@
     "notifications": "Thông báo",
     "properties": "Bất động sản",
     "reports": "Báo cáo",
-    "transactions": "Giao dịch"
+    "transactions": "Giao dịch",
+    "ownerDocuments": "Tài liệu",
+    "ownerListings": "Tin đăng của tôi",
+    "ownerProperties": "Tài sản của tôi"
   },
   "placeholders": {
     "nameEmailPhone": "Tên, email, số điện thoại, mã"

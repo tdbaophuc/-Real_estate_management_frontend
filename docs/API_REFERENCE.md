@@ -2,7 +2,104 @@
 
 This document was generated from OpenAPI `/v3/api-docs` plus the current controller/DTO signatures on 2026-07-01. The base URL depends on the environment, for example `http://localhost:8080`.
 
-Total endpoints: **146**.
+Total endpoints: **149**.
+
+## Recent Backend Changes - 2026-07-23
+
+### Public listing images
+
+The public listing APIs now include public property images directly in `PublicListingResponse`.
+
+Affected endpoints:
+- `GET /api/v1/search/listings`
+- `GET /api/v1/search/listings/{slug}`
+- AI responses that embed `suggestedListings`
+
+New fields added to each public listing object:
+```json
+{
+  "coverImageUrl": "/uploads/properties/example-cover.webp",
+  "images": [
+    {
+      "id": 1,
+      "imageUrl": "/uploads/properties/example-cover.webp",
+      "altText": "Living room",
+      "coverImage": true,
+      "displayOrder": 0
+    }
+  ]
+}
+```
+
+Only images belonging to published, public listings are exposed through these public listing responses. The internal file APIs under `/api/v1/files/**` remain protected.
+
+### Public guest AI chat
+
+Guests can now use the AI real-estate assistant without a JWT through public endpoints.
+
+#### `POST /api/v1/public/ai/chat/sessions`
+
+- Auth: Public.
+- Optional header: `X-Guest-Session-Id`.
+- If the header is omitted, backend generates a guest session id and returns it both in the response header `X-Guest-Session-Id` and in `data.guestSessionId`.
+- Body is optional.
+
+Request:
+```json
+{
+  "title": "Landing page chat"
+}
+```
+
+Response data:
+```json
+{
+  "id": 1,
+  "title": "Landing page chat",
+  "status": "OPEN",
+  "createdById": null,
+  "createdByName": null,
+  "guestSessionId": "generated-or-client-provided-session-id",
+  "lastMessageAt": null,
+  "createdAt": "2026-07-23T08:00:00Z",
+  "messages": [],
+  "suggestedListings": []
+}
+```
+
+#### `POST /api/v1/public/ai/chat/sessions/{sessionId}/messages`
+
+- Auth: Public.
+- Required header: `X-Guest-Session-Id`.
+- Uses only public listing context. It does not expose private customer, lead, owner, contract, appointment, or internal pricing data.
+
+Request:
+```json
+{
+  "content": "Toi muon thue can ho 2 phong ngu tam 15 trieu"
+}
+```
+
+Response data is `ChatSessionResponse`; `suggestedListings` may contain public listings with `coverImageUrl` and `images`.
+
+#### `GET /api/v1/public/ai/chat/sessions/{sessionId}`
+
+- Auth: Public.
+- Required header: `X-Guest-Session-Id`.
+- Returns the guest chat session only when the header matches the stored guest session id.
+
+### ChatSessionResponse change
+
+`ChatSessionResponse` now includes nullable `guestSessionId`:
+```json
+{
+  "createdById": 1,
+  "createdByName": "Customer",
+  "guestSessionId": null
+}
+```
+
+Authenticated chat sessions have `guestSessionId: null`. Guest chat sessions have `createdById: null`, `createdByName: null`, and a non-null `guestSessionId`.
 
 ## Common Conventions
 

@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Bell,
-  Bot,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -49,11 +48,11 @@ const iconMap = {
   tasks: ClipboardCheck,
   appointments: CalendarDays,
   contracts: FileSignature,
+  documents: FileSignature,
   transactions: ReceiptText,
   commissions: BriefcaseBusiness,
   notifications: Bell,
   reports: BarChart3,
-  ai: Bot,
   admin: ShieldCheck
 };
 
@@ -77,15 +76,24 @@ export function AuthenticatedLayout() {
   });
   const unreadCount = unreadQuery.data ?? 0;
   const closeMobileNav = () => setIsMobileNavOpen(false);
+  const homeHref = roles.includes("OWNER") && roles.length === 1 ? "/owner/dashboard" : "/dashboard";
   const commissionSubItems: Array<{ href: string; label: string; roles: RoleCode[] }> = [
     { href: "/commissions/my", label: "My Commissions", roles: ["ADMIN", "MANAGER", "AGENT"] as RoleCode[] },
     { href: "/commissions/manage", label: "Commissions Management", roles: ["ADMIN", "MANAGER"] as RoleCode[] },
     { href: "/commissions/rules", label: "Commission Rules", roles: ["ADMIN", "MANAGER"] as RoleCode[] }
   ].filter((item) => item.roles.some((role) => roles.includes(role)));
+  const listingSubItems: Array<{ href: string; label: string; roles: RoleCode[] }> = [
+    { href: "/listings", label: "All Listings", roles: ["ADMIN", "MANAGER", "AGENT"] as RoleCode[] },
+    { href: "/listings/review-queue", label: "Review Queue", roles: ["ADMIN", "MANAGER"] as RoleCode[] }
+  ].filter((item) => item.roles.some((role) => roles.includes(role)));
+  const adminSubItems: Array<{ href: string; labelKey: string; roles: RoleCode[] }> = [
+    { href: "/admin/users", labelKey: "navigation.adminUsers", roles: ["ADMIN"] as RoleCode[] },
+    { href: "/admin/audit-logs", labelKey: "navigation.auditLogs", roles: ["ADMIN"] as RoleCode[] }
+  ].filter((item) => item.roles.some((role) => roles.includes(role)));
   const sidebarNavigation = (
     <>
       <div className="sidebar-header">
-        <Link className="brand sidebar-brand" to="/dashboard" onClick={closeMobileNav}>
+        <Link className="brand sidebar-brand" to={homeHref} onClick={closeMobileNav}>
           <span className="brand-mark">
             <Building2 size={20} />
           </span>
@@ -126,6 +134,48 @@ export function AuthenticatedLayout() {
             );
           }
 
+          if (item.href === "/listings" && listingSubItems.length > 1) {
+            return (
+              <details className="sidebar-nav-group" key={item.href} open={location.pathname.startsWith("/listings")}>
+                <summary title={t(item.labelKey)}>
+                  <Icon size={17} />
+                  <span>{t(item.labelKey)}</span>
+                  <ChevronDown className="sidebar-nav-group-chevron" size={15} />
+                </summary>
+                <div className="sidebar-subnav">
+                  {listingSubItems.map((subItem) => (
+                    <NavLink key={subItem.href} to={subItem.href} onClick={closeMobileNav} end={subItem.href === "/listings"}>
+                      <span>{subItem.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
+            );
+          }
+
+          if (item.href === "/admin/audit-logs") {
+            return null;
+          }
+
+          if (item.href === "/admin/users") {
+            return (
+              <details className="sidebar-nav-group" key={item.href} open={location.pathname.startsWith("/admin")}>
+                <summary title={t("navigation.admin")}>
+                  <Icon size={17} />
+                  <span>{t("navigation.admin")}</span>
+                  <ChevronDown className="sidebar-nav-group-chevron" size={15} />
+                </summary>
+                <div className="sidebar-subnav">
+                  {adminSubItems.map((subItem) => (
+                    <NavLink key={subItem.href} to={subItem.href} onClick={closeMobileNav} end={subItem.href === "/admin/users"}>
+                      <span>{t(subItem.labelKey)}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
+            );
+          }
+
           return (
             <NavLink
               key={item.href}
@@ -139,18 +189,6 @@ export function AuthenticatedLayout() {
           );
         })}
       </nav>
-      <button
-        className="sidebar-ai-toggle"
-        type="button"
-        aria-pressed={isAiAssistantOpen}
-        onClick={() => {
-          setIsAiAssistantOpen((current) => !current);
-          closeMobileNav();
-        }}
-      >
-        <Bot size={18} />
-        <span>{t("navigation.aiAssistant")}</span>
-      </button>
     </>
   );
 

@@ -396,7 +396,16 @@ function CommissionManagementView() {
           }}
         >
           {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
-          <Input label="Payment Reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} required />
+          <Input
+            label="Payment document / receipt reference"
+            placeholder="Receipt, bank transfer, or payment document code"
+            value={paymentReference}
+            onChange={(event) => setPaymentReference(event.target.value)}
+            required
+          />
+          <p className="muted">
+            This stores the reference text sent as paymentReference to the API; it does not upload or open a payment file.
+          </p>
           <Input label="Paid Date" type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} required />
           <label className="field">
             <span>Notes</span>

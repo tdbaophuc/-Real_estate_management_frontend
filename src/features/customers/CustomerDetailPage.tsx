@@ -17,6 +17,7 @@ import {
   Trash2
 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -137,6 +138,7 @@ export function CustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [note, setNote] = useState("");
   const [tagName, setTagName] = useState("");
   const [isSegmentEditorOpen, setIsSegmentEditorOpen] = useState(false);
@@ -173,6 +175,7 @@ export function CustomerDetailPage() {
     queryKey: ["customer", id, "ai-summary"],
     retry: 1
   });
+  const canDeleteCustomer = Boolean(user?.roles.some((role) => role === "ADMIN" || role === "MANAGER"));
 
   const invalidateCustomerData = () =>
     Promise.all([
@@ -356,10 +359,12 @@ export function CustomerDetailPage() {
             Back to customers
           </Link>
         </Button>
-        <Button variant="danger" size="sm" onClick={() => setIsDeleteCustomerOpen(true)} disabled={deleteCustomerMutation.isPending}>
-          <Trash2 size={16} />
-          Delete customer
-        </Button>
+        {canDeleteCustomer ? (
+          <Button variant="danger" size="sm" onClick={() => setIsDeleteCustomerOpen(true)} disabled={deleteCustomerMutation.isPending}>
+            <Trash2 size={16} />
+            Delete customer
+          </Button>
+        ) : null}
       </div>
       {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
 

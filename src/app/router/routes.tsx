@@ -14,6 +14,7 @@ import { ContractsPage } from "../../features/contracts/ContractsPage";
 import { CommissionsPage } from "../../features/commissions/CommissionsPage";
 import { ProtectedRoute } from "../../shared/auth/ProtectedRoute";
 import { RoleGuard } from "../../shared/auth/RoleGuard";
+import { useAuth } from "../../shared/auth/useAuth";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { RegisterPage } from "../../features/auth/RegisterPage";
@@ -28,6 +29,7 @@ import { ListingsPage } from "../../features/listings/ListingsPage";
 import { LeadDetailPage } from "../../features/leads/LeadDetailPage";
 import { LeadsPage } from "../../features/leads/LeadsPage";
 import { FollowUpTasksPage } from "../../features/follow-up-tasks/FollowUpTasksPage";
+import { OwnerPortalPage } from "../../features/owner/OwnerPortalPage";
 import { PropertiesPage } from "../../features/properties/PropertiesPage";
 import { PropertyDetailPage } from "../../features/properties/PropertyDetailPage";
 import { PropertyFormPage } from "../../features/properties/PropertyFormPage";
@@ -35,14 +37,23 @@ import { TransactionDetailPage } from "../../features/transactions/TransactionDe
 import { TransactionFormPage } from "../../features/transactions/TransactionFormPage";
 import { TransactionsPage } from "../../features/transactions/TransactionsPage";
 import { FavoriteListingsPage } from "../../features/public-listings/FavoriteListingsPage";
+import { LandingPage } from "../../features/public-listings/LandingPage";
 import { PublicListingDetailPage } from "../../features/public-listings/PublicListingDetailPage";
-import { PublicListingSearchPage } from "../../features/public-listings/PublicListingSearchPage";
+
+function AuthenticatedHomeRedirect() {
+  const { user } = useAuth();
+  const roles = user?.roles ?? [];
+  const href = roles.includes("OWNER") && roles.length === 1 ? "/owner/dashboard" : "/dashboard";
+
+  return <Navigate to={href} replace />;
+}
 
 export const router: Router = createBrowserRouter([
   {
     element: <PublicLayout />,
     children: [
-      { path: "/", element: <PublicListingSearchPage /> },
+      { path: "/", element: <LandingPage /> },
+      { path: "/search", element: <LandingPage /> },
       { path: "/listing/:slug", element: <PublicListingDetailPage /> },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> }
@@ -68,9 +79,57 @@ export const router: Router = createBrowserRouter([
           },
           { path: "/account", element: <AccountPage /> },
           {
+            path: "/owner/dashboard",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="dashboard" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/owner/properties",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="properties" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/owner/listings",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="listings" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/owner/documents",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="documents" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/owner/contracts",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="contracts" />
+              </RoleGuard>
+            )
+          },
+          {
+            path: "/owner/transactions",
+            element: (
+              <RoleGuard allowedRoles={["OWNER"]}>
+                <OwnerPortalPage view="transactions" />
+              </RoleGuard>
+            )
+          },
+          {
             path: "/favorites",
             element: (
-              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]}>
+              <RoleGuard allowedRoles={["CUSTOMER"]}>
                 <FavoriteListingsPage />
               </RoleGuard>
             )
@@ -198,7 +257,7 @@ export const router: Router = createBrowserRouter([
           {
             path: "/appointments",
             element: (
-              <RoleGuard allowedRoles={["ADMIN", "MANAGER", "AGENT"]}>
+              <RoleGuard allowedRoles={["ADMIN", "MANAGER"]}>
                 <AppointmentsPage />
               </RoleGuard>
             )
@@ -329,7 +388,7 @@ export const router: Router = createBrowserRouter([
           },
           {
             path: "/notifications",
-            element: <Navigate to="/dashboard" replace />
+            element: <AuthenticatedHomeRedirect />
           },
           {
             path: "/reports",

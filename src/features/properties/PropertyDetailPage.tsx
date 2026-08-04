@@ -1108,6 +1108,7 @@ export function PropertyDetailPage() {
   const selectedStatus = nextStatus || property?.status || "";
   const linkedListings = linkedListingsQuery.data?.content ?? [];
   const linkedContracts = linkedContractsQuery.data?.content ?? [];
+  const canDeleteProperty = Boolean(user?.roles.some((role) => role === "ADMIN" || role === "MANAGER"));
 
   if (!id) {
     return (
@@ -1159,16 +1160,18 @@ export function PropertyDetailPage() {
                 <CheckCircle2 size={16} />
                 Change Status
               </Button>
-              <Button
-                className="property-delete-icon"
-                variant="ghost"
-                size="sm"
-                aria-label="Delete property"
-                onClick={() => setIsDeletePropertyOpen(true)}
-                disabled={deletePropertyMutation.isPending}
-              >
-                <Trash2 size={16} />
-              </Button>
+              {canDeleteProperty ? (
+                <Button
+                  className="property-delete-icon"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Delete property"
+                  onClick={() => setIsDeletePropertyOpen(true)}
+                  disabled={deletePropertyMutation.isPending}
+                >
+                  <Trash2 size={16} />
+                </Button>
+              ) : null}
             </div>
           </div>
           <PropertyHeroGallery images={images} propertyName={property.name} />

@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
+  AlertTriangle,
   BarChart3,
   Bell,
-  Bot,
+  Building2,
   CalendarDays,
   CheckCircle2,
+  FileText,
   Heart,
   Home,
   LayoutDashboard,
@@ -20,13 +22,16 @@ import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useText } from "../../shared/i18n/useText";
-import { formatCurrency } from "../../shared/lib/format";
+import { formatCurrency, formatDate } from "../../shared/lib/format";
 import { getUnreadNotificationCount } from "../notifications/notificationApi";
 import {
   getFavoriteListings,
   searchPublicListings,
   type PublicListing
 } from "../public-listings/publicListingApi";
+import { searchContracts } from "../contracts/contractApi";
+import { searchFollowUpTasks } from "../follow-up-tasks/followUpTaskApi";
+import { searchListings } from "../listings/listingApi";
 import { getRoleDashboard, type DashboardRole } from "./dashboardApi";
 
 const rolePriority: DashboardRole[] = ["ADMIN", "MANAGER", "AGENT"];
@@ -109,7 +114,7 @@ function CustomerDashboard() {
         </div>
         <div className="customer-portal-actions">
           <Button asChild>
-            <Link to="/">
+            <Link to="/search">
               <Search size={16} />
               {tx("Browse listings")}
             </Link>
@@ -124,7 +129,7 @@ function CustomerDashboard() {
       </div>
 
       <div className="customer-action-strip" aria-label={tx("Customer next actions")}>
-        <Link to="/">
+        <Link to="/search">
           <Search size={18} />
           <span>
             <strong>{tx("Find a property")}</strong>
@@ -142,13 +147,6 @@ function CustomerDashboard() {
                 ? favoritesQuery.data.totalElements.toLocaleString("vi-VN")
                 : "0"}
             </small>
-          </span>
-        </Link>
-        <Link to="/ai">
-          <Bot size={18} />
-          <span>
-            <strong>{tx("Ask AI")}</strong>
-            <small>{tx("Compare neighborhoods, prices, and next steps.")}</small>
           </span>
         </Link>
       </div>
@@ -190,7 +188,7 @@ function CustomerDashboard() {
               description={tx("Start by saving listings that match your budget and preferred locations.")}
               action={
                 <Button asChild>
-                  <Link to="/">{tx("Browse listings")}</Link>
+                  <Link to="/search">{tx("Browse listings")}</Link>
                 </Button>
               }
             />
@@ -230,13 +228,6 @@ function CustomerDashboard() {
               <small>{tx("Keep your contact details current before requesting a viewing.")}</small>
             </span>
           </Link>
-          <Link className="customer-status-row" to="/ai">
-            <Bot size={18} />
-            <span>
-              <strong>{tx("AI assistant")}</strong>
-              <small>{tx("Ask for listing recommendations and buying guidance.")}</small>
-            </span>
-          </Link>
         </aside>
       </div>
 
@@ -247,7 +238,7 @@ function CustomerDashboard() {
             <h3>{tx("Market-ready listings to review")}</h3>
           </div>
           <Button asChild variant="ghost" size="sm">
-            <Link to="/">
+            <Link to="/search">
               {tx("Browse all")}
               <ArrowRight size={15} />
             </Link>
@@ -268,6 +259,125 @@ function CustomerDashboard() {
           </div>
         ) : null}
       </section>
+    </section>
+  );
+}
+
+function ManagerAlertPanel() {
+  const tx = useText();
+  const nowIso = useMemo(() => new Date().toISOString(), []);
+  const pendingListingsQuery = useQuery({
+    queryFn: () =>
+      searchListings({
+        page: 0,
+        size: 3,
+        sortBy: "submittedAt",
+        sortDirection: "ASC",
+        status: "PENDING_REVIEW"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "pending-listings"],
+    retry: 1
+  });
+  const pendingContractsQuery = useQuery({
+    queryFn: () =>
+      searchContracts({
+        page: 0,
+        size: 3,
+        status: "PENDING_REVIEW"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "pending-contracts"],
+    retry: 1
+  });
+  const overdueTasksQuery = useQuery({
+    queryFn: () =>
+      searchFollowUpTasks({
+        dueTo: nowIso,
+        page: 0,
+        size: 3,
+        sortBy: "dueAt",
+        sortDirection: "ASC",
+        status: "PENDING"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "overdue-tasks", nowIso],
+    retry: 1
+  });
+  const alerts = [
+    {
+      count: pendingListingsQuery.data?.totalElements ?? 0,
+      href: "/listings/review-queue",
+      icon: Building2,
+      isLoading: pendingListingsQuery.isLoading,
+      label: tx("Listings pending review"),
+      records: (pendingListingsQuery.data?.content ?? []).map((listing) => ({
+        detail: listing.submittedAt ? formatDate(listing.submittedAt) : listing.status,
+        href: `/listings/${listing.id}`,
+        title: listing.title
+      }))
+    },
+    {
+      count: pendingContractsQuery.data?.totalElements ?? 0,
+      href: "/contracts",
+      icon: FileText,
+      isLoading: pendingContractsQuery.isLoading,
+      label: tx("Contracts pending review"),
+      records: (pendingContractsQuery.data?.content ?? []).map((contract) => ({
+        detail: contract.propertyAddress || contract.code,
+        href: `/contracts/${contract.id}`,
+        title: contract.title
+      }))
+    },
+    {
+      count: overdueTasksQuery.data?.totalElements ?? 0,
+      href: "/follow-up-tasks",
+      icon: AlertTriangle,
+      isLoading: overdueTasksQuery.isLoading,
+      label: tx("Overdue follow-up tasks"),
+      records: (overdueTasksQuery.data?.content ?? []).map((task) => ({
+        detail: task.dueAt ? formatDate(task.dueAt) : task.status,
+        href: `/follow-up-tasks`,
+        title: task.title
+      }))
+    }
+  ];
+
+  return (
+    <section className="manager-alert-panel">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">{tx("Operations watchlist")}</p>
+          <h3>{tx("Review items that need manager action")}</h3>
+        </div>
+      </div>
+      <div className="manager-alert-grid">
+        {alerts.map((alert) => {
+          const Icon = alert.icon;
+
+          return (
+            <article className="manager-alert-card" key={alert.href}>
+              <Link className="manager-alert-card-heading" to={alert.href}>
+                <Icon size={18} />
+                <span>
+                  <strong>{alert.isLoading ? "--" : alert.count.toLocaleString("vi-VN")}</strong>
+                  <small>{alert.label}</small>
+                </span>
+                <ArrowRight size={15} />
+              </Link>
+              <div className="manager-alert-list">
+                {alert.records.length ? (
+                  alert.records.map((record) => (
+                    <Link to={record.href} key={`${alert.href}-${record.href}-${record.title}`}>
+                      <span>{record.title}</span>
+                      <small>{record.detail}</small>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="muted">{alert.isLoading ? tx("Loading") : tx("No records returned by API.")}</p>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -335,6 +445,7 @@ export function DashboardPage() {
               </Link>
             ))}
           </div>
+          {dashboardRole === "MANAGER" ? <ManagerAlertPanel /> : null}
         </>
       ) : null}
     </section>

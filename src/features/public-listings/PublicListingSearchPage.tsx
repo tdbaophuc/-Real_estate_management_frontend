@@ -21,6 +21,7 @@ import { formatCurrency } from "../../shared/lib/format";
 import { useText } from "../../shared/i18n/useText";
 import {
   searchPublicListings,
+  getPublicListingImageUrl,
   type ListingPurpose,
   type PublicListing,
   type PublicListingSearchParams
@@ -137,10 +138,12 @@ function formatArea(area: number | null) {
 }
 
 function ListingImage({ listing }: { listing: PublicListing }) {
-  if (listing.coverImageUrl) {
+  const imageUrl = getPublicListingImageUrl(listing);
+
+  if (imageUrl) {
     return (
       <img
-        src={listing.coverImageUrl}
+        src={imageUrl}
         alt={listing.title}
         loading="lazy"
         onError={(event) => {

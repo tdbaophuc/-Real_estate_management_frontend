@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { ArrowRight, Bath, BedDouble, Bot, Heart, MapPin, Ruler, Search } from "lucide-react";
+import { ArrowRight, Bath, BedDouble, Heart, MapPin, Ruler, Search } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -9,7 +9,7 @@ import { Pagination } from "../../shared/ui/Pagination";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { formatCurrency } from "../../shared/lib/format";
 import { useText } from "../../shared/i18n/useText";
-import { getFavoriteListings, type PublicListing } from "./publicListingApi";
+import { getFavoriteListings, getPublicListingImageUrl, type PublicListing } from "./publicListingApi";
 
 const pageSize = 10;
 
@@ -31,14 +31,15 @@ function formatArea(area: number | null, tx: (text: string) => string) {
 
 function FavoriteListingRow({ listing }: { listing: PublicListing }) {
   const tx = useText();
+  const imageUrl = getPublicListingImageUrl(listing);
 
   return (
     <article className="favorite-listing-row">
       <div
         className="favorite-listing-image"
-        style={listing.coverImageUrl ? { backgroundImage: `url(${listing.coverImageUrl})` } : undefined}
+        style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
       >
-        {!listing.coverImageUrl ? <Heart size={18} /> : null}
+        {!imageUrl ? <Heart size={18} /> : null}
       </div>
       <div>
         <StatusBadge tone={statusTone(listing.status)}>{listing.status}</StatusBadge>
@@ -101,15 +102,9 @@ export function FavoriteListingsPage() {
         </div>
         <div className="favorite-shortlist-actions">
           <Button asChild>
-            <Link to="/">
+            <Link to="/search">
               <Search size={16} />
               {tx("Browse listings")}
-            </Link>
-          </Button>
-          <Button asChild variant="secondary">
-            <Link to="/ai">
-              <Bot size={16} />
-              {tx("Ask AI")}
             </Link>
           </Button>
         </div>
@@ -137,7 +132,7 @@ export function FavoriteListingsPage() {
             description={tx("Start by saving listings that match your budget and preferred locations.")}
             action={
               <Button asChild>
-                <Link to="/">{tx("Browse listings")}</Link>
+                  <Link to="/search">{tx("Browse listings")}</Link>
               </Button>
             }
           />

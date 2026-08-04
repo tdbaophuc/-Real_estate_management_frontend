@@ -81,6 +81,7 @@
   },
   "navigation": {
     "account": "Account",
+    "admin": "Admin",
     "adminUsers": "Admin users",
     "aiAssistant": "AI assistant",
     "appointments": "Appointments",
@@ -95,6 +96,9 @@
     "leads": "Leads",
     "listings": "Listings",
     "notifications": "Notifications",
+    "ownerDocuments": "Documents",
+    "ownerListings": "My listings",
+    "ownerProperties": "My properties",
     "properties": "Properties",
     "reports": "Reports",
     "transactions": "Transactions"

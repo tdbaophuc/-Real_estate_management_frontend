@@ -14,10 +14,10 @@ export type NavigationItem = {
   | "tasks"
   | "appointments"
   | "contracts"
+  | "documents"
   | "transactions"
   | "commissions"
   | "reports"
-  | "ai"
   | "admin";
   roles: RoleCode[];
 };
@@ -30,7 +30,13 @@ export const navigationItems: NavigationItem[] = [
     roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
   },
   {
-    href: "/",
+    href: "/owner/dashboard",
+    labelKey: "navigation.dashboard",
+    icon: "dashboard",
+    roles: ["OWNER"]
+  },
+  {
+    href: "/search",
     labelKey: "navigation.browseListings",
     icon: "browse",
     roles: ["CUSTOMER"]
@@ -39,7 +45,7 @@ export const navigationItems: NavigationItem[] = [
     href: "/favorites",
     labelKey: "navigation.favorites",
     icon: "favorites",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
+    roles: ["CUSTOMER"]
   },
   {
     href: "/properties",
@@ -48,10 +54,28 @@ export const navigationItems: NavigationItem[] = [
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/owner/properties",
+    labelKey: "navigation.ownerProperties",
+    icon: "properties",
+    roles: ["OWNER"]
+  },
+  {
     href: "/listings",
     labelKey: "navigation.listings",
     icon: "listings",
     roles: ["ADMIN", "MANAGER", "AGENT"]
+  },
+  {
+    href: "/owner/listings",
+    labelKey: "navigation.ownerListings",
+    icon: "listings",
+    roles: ["OWNER"]
+  },
+  {
+    href: "/owner/documents",
+    labelKey: "navigation.ownerDocuments",
+    icon: "documents",
+    roles: ["OWNER"]
   },
   {
     href: "/customers",
@@ -75,7 +99,13 @@ export const navigationItems: NavigationItem[] = [
     href: "/appointments",
     labelKey: "navigation.appointments",
     icon: "appointments",
-    roles: ["ADMIN", "MANAGER", "AGENT"]
+    roles: ["ADMIN", "MANAGER"]
+  },
+  {
+    href: "/appointments/my",
+    labelKey: "navigation.appointments",
+    icon: "appointments",
+    roles: ["AGENT"]
   },
   {
     href: "/contracts",
@@ -84,10 +114,22 @@ export const navigationItems: NavigationItem[] = [
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/owner/contracts",
+    labelKey: "navigation.contracts",
+    icon: "contracts",
+    roles: ["OWNER"]
+  },
+  {
     href: "/transactions",
     labelKey: "navigation.transactions",
     icon: "transactions",
     roles: ["ADMIN", "MANAGER", "AGENT"]
+  },
+  {
+    href: "/owner/transactions",
+    labelKey: "navigation.transactions",
+    icon: "transactions",
+    roles: ["OWNER"]
   },
   {
     href: "/commissions/my",
@@ -100,12 +142,6 @@ export const navigationItems: NavigationItem[] = [
     labelKey: "navigation.reports",
     icon: "reports",
     roles: ["ADMIN", "MANAGER"]
-  },
-  {
-    href: "/ai",
-    labelKey: "navigation.aiAssistant",
-    icon: "ai",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
   },
   {
     href: "/admin/users",

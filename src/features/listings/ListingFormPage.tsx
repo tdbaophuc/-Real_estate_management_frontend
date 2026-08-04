@@ -26,7 +26,7 @@ import {
   type ListingWorkflowAction
 } from "./listingApi";
 import { getListingPackages } from "../master-data/masterDataApi";
-import { searchProperties } from "../properties/propertyApi";
+import { getProperty, searchProperties } from "../properties/propertyApi";
 
 const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
 const requiredNumber = z.string().trim().min(1, "Required").refine((value) => !Number.isNaN(Number(value)), "Must be a number");
@@ -327,6 +327,13 @@ export function ListingFormPage() {
     resolver: zodResolver(listingFormSchema)
   });
   const watchedValues = watch();
+  const selectedPropertyQuery = useQuery({
+    enabled: Boolean(watchedValues.propertyId),
+    queryFn: () => getProperty(watchedValues.propertyId),
+    queryKey: ["listing-form-property", watchedValues.propertyId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
   const saveMutation = useMutation({
     mutationFn: (values: ListingFormValues) =>
       isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values)),
@@ -395,6 +402,20 @@ export function ListingFormPage() {
       );
     }
   }, [workflowListing?.property]);
+
+  useEffect(() => {
+    if (!workflowListing?.property && selectedPropertyQuery.data && !propertySearch) {
+      setPropertySearch(
+        [
+          selectedPropertyQuery.data.code,
+          selectedPropertyQuery.data.name,
+          selectedPropertyQuery.data.address.fullAddress
+        ]
+          .filter(Boolean)
+          .join(" / ")
+      );
+    }
+  }, [propertySearch, selectedPropertyQuery.data, workflowListing?.property]);
 
   function persistWorkflowListing(saved: ListingRecord) {
     setWorkflowListing(saved);
@@ -579,7 +600,14 @@ export function ListingFormPage() {
           <div className="listing-preview-body">
             <p className="eyebrow">Live Preview</p>
             <h3>{watchedValues.title || "Listing title"}</h3>
-            <p>{workflowListing?.property?.address || workflowListing?.property?.name || `Property #${watchedValues.propertyId || "-"}`}</p>
+            <p>
+              {workflowListing?.property?.address ||
+                workflowListing?.property?.name ||
+                selectedPropertyQuery.data?.address.fullAddress ||
+                selectedPropertyQuery.data?.name ||
+                propertySearch ||
+                "-"}
+            </p>
             <strong>
               {watchedValues.askingPrice && !Number.isNaN(Number(watchedValues.askingPrice))
                 ? formatCurrency(Number(watchedValues.askingPrice), watchedValues.currency || "VND")

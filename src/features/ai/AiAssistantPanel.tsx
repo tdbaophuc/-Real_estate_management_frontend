@@ -1,9 +1,10 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Copy, ExternalLink, MessageSquarePlus, Send, X } from "lucide-react";
+import { Bot, Copy, ExternalLink, MessageSquarePlus, RotateCcw, Send, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { formatCurrency } from "../../shared/lib/format";
+import { useAuth } from "../../shared/auth/useAuth";
 import { useText } from "../../shared/i18n/useText";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
@@ -38,6 +39,43 @@ function copyText(value: string) {
   }
 }
 
+type StoredChatSession = {
+  id: number | string;
+  lastMessageAt: string;
+  title: string;
+};
+
+function getSessionStorageKey(userId: number | string | undefined) {
+  return `rem.ai.chatSessions.${userId ?? "anonymous"}`;
+}
+
+function readStoredSessions(storageKey: string): StoredChatSession[] {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : [];
+
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is StoredChatSession =>
+        item &&
+        typeof item === "object" &&
+        "id" in item &&
+        typeof (item as StoredChatSession).title === "string"
+      )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatSessionTime(value: string) {
+  if (!value) {
+    return "No messages yet";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("vi-VN");
+}
+
 function SuggestedListingCard({ listing }: { listing: AiSuggestedListing }) {
   const tx = useText();
 
@@ -60,9 +98,14 @@ function SuggestedListingCard({ listing }: { listing: AiSuggestedListing }) {
 
 export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
   const tx = useText();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<number | string | null>(null);
+  const [isSessionListOpen, setIsSessionListOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const storageKey = useMemo(() => getSessionStorageKey(user?.id), [user?.id]);
+  const [storedSessions, setStoredSessions] = useState<StoredChatSession[]>(() => readStoredSessions(storageKey));
   const sessionQuery = useQuery({
     enabled: activeSessionId !== null,
     queryFn: () => getChatSession(activeSessionId as number | string),
@@ -87,10 +130,50 @@ export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
     onSuccess: (session) => {
       setMessage("");
       setActiveSessionId(session.id);
+      persistSession(session);
       queryClient.setQueryData(["ai-chat-session", session.id], session);
     }
   });
   const sendError = sendMutation.error ? normalizeUnknownError(sendMutation.error) : null;
+
+  useEffect(() => {
+    setStoredSessions(readStoredSessions(storageKey));
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (sessionQuery.data) {
+      persistSession(sessionQuery.data);
+    }
+  }, [sessionQuery.data]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 132)}px`;
+  }, [message]);
+
+  function persistSession(session: AiChatSession) {
+    const nextSession: StoredChatSession = {
+      id: session.id,
+      lastMessageAt: session.lastMessageAt || session.createdAt,
+      title: session.title || "AI chat"
+    };
+
+    setStoredSessions((current) => {
+      const nextSessions = [
+        nextSession,
+        ...current.filter((item) => String(item.id) !== String(session.id))
+      ].slice(0, 12);
+
+      window.localStorage.setItem(storageKey, JSON.stringify(nextSessions));
+      return nextSessions;
+    });
+  }
 
   function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,6 +186,25 @@ export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
   function startNewSession() {
     setActiveSessionId(null);
     setMessage("");
+    setIsSessionListOpen(false);
+  }
+
+  function selectSession(sessionId: number | string) {
+    setActiveSessionId(sessionId);
+    setMessage("");
+    setIsSessionListOpen(false);
+  }
+
+  function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (message.trim() && !sendMutation.isPending) {
+      sendMutation.mutate(message.trim());
+    }
   }
 
   return (
@@ -113,6 +215,16 @@ export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
           <h2>{tx("Property chat")}</h2>
         </div>
         <div className="ai-assistant-header-actions">
+          <Button
+            type="button"
+            variant={isSessionListOpen ? "primary" : "ghost"}
+            size="icon"
+            aria-label={tx("Previous AI chat sessions")}
+            aria-expanded={isSessionListOpen}
+            onClick={() => setIsSessionListOpen((current) => !current)}
+          >
+            <RotateCcw size={17} />
+          </Button>
           <Button type="button" variant="ghost" size="icon" aria-label={tx("New AI chat")} onClick={startNewSession}>
             <MessageSquarePlus size={17} />
           </Button>
@@ -121,6 +233,26 @@ export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
       </header>
+
+      {isSessionListOpen ? (
+        <section className="ai-assistant-sessions" aria-label={tx("Previous AI chat sessions")}>
+          {storedSessions.length ? (
+            storedSessions.map((session) => (
+              <button
+                className={String(activeSessionId) === String(session.id) ? "is-active" : ""}
+                key={session.id}
+                type="button"
+                onClick={() => selectSession(session.id)}
+              >
+                <strong>{session.title}</strong>
+                <small>{formatSessionTime(session.lastMessageAt)}</small>
+              </button>
+            ))
+          ) : (
+            <p className="muted">{tx("No previous chat sessions on this device.")}</p>
+          )}
+        </section>
+      ) : null}
 
       <p className="ai-assistant-disclaimer">
         <Bot size={16} />
@@ -186,10 +318,12 @@ export function AiAssistantPanel({ onClose }: { onClose: () => void }) {
         <label className="field" htmlFor="ai-assistant-message">
           <span>{tx("Message")}</span>
           <textarea
+            ref={textareaRef}
             id="ai-assistant-message"
             className="input textarea"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={handleMessageKeyDown}
             placeholder={tx("Ask for a shortlist, comparison, customer summary, or follow-up suggestion.")}
           />
         </label>

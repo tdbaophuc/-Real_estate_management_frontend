@@ -5,6 +5,9 @@ import {
   ArrowLeft,
   Bath,
   BedDouble,
+  Building2,
+  CalendarDays,
+  Camera,
   Heart,
   Home,
   Mail,
@@ -17,7 +20,6 @@ import { normalizeUnknownError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
-import { ImageGallery } from "../../shared/ui/ImageGallery";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
@@ -27,6 +29,7 @@ import {
   addListingFavorite,
   createListingAppointmentRequest,
   createListingInquiry,
+  getPublicListingImageUrl,
   getFavoriteListings,
   getPublicListingDetail,
   removeListingFavorite,
@@ -128,6 +131,7 @@ export function PublicListingDetailPage() {
   const [appointmentDraft, setAppointmentDraft] = useState(emptyAppointmentDraft);
   const [inquirySent, setInquirySent] = useState(false);
   const [appointmentSent, setAppointmentSent] = useState(false);
+  const [activeContactTab, setActiveContactTab] = useState<"appointment" | "inquiry">("appointment");
   const listingQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () => getPublicListingDetail(slug ?? ""),
@@ -144,6 +148,7 @@ export function PublicListingDetailPage() {
     ? normalizeUnknownError(listingQuery.error)
     : null;
   const listing = listingQuery.data;
+  const listingImageUrl = listing ? getPublicListingImageUrl(listing) : null;
   const favoriteListings = favoritesQuery.data?.content;
   const isFavorite = useMemo(() => {
     if (!listing) {
@@ -238,7 +243,7 @@ export function PublicListingDetailPage() {
       <Button asChild variant="ghost" size="sm">
         <Link to="/">
           <ArrowLeft size={16} />
-          Back to search
+          Back to home
         </Link>
       </Button>
       {listingQuery.isLoading ? (
@@ -277,48 +282,72 @@ export function PublicListingDetailPage() {
             </div>
             {canFavorite ? <FavoriteButton isFavorite={isFavorite} listing={listing} /> : null}
           </div>
-          <ImageGallery images={listing.images} />
           <div className="detail-grid">
-            <section className="content-section detail-main-section">
-              <h2>
-                {listing.price
-                  ? formatCurrency(listing.price, listing.currency)
-                  : "Price updating"}
-              </h2>
-              <div className="listing-meta large">
-                <span>
-                  <Ruler size={16} />
-                  {formatArea(listing.area)}
-                </span>
-                <span>
-                  <BedDouble size={16} />
-                  {listing.bedrooms ?? "-"} bedrooms
-                </span>
-                <span>
-                  <Bath size={16} />
-                  {listing.bathrooms ?? "-"} bathrooms
-                </span>
-              </div>
-              <div className="detail-description">
-                <p className="eyebrow">Description</p>
-                <p>{listing.description}</p>
-              </div>
-              <div className="detail-amenities">
-                <p className="eyebrow">Amenities</p>
-                {listing.amenities.length ? (
-                  <div className="amenity-grid">
-                    {listing.amenities.map((amenity) => (
-                      <span key={amenity.id}>
-                        <Home size={15} />
-                        {amenity.name}
-                      </span>
-                    ))}
-                  </div>
+            <div className="detail-main-column">
+              <div className="public-listing-hero-image">
+                {listingImageUrl ? (
+                  <img src={listingImageUrl} alt={listing.images[0]?.alt ?? listing.title} />
                 ) : (
-                  <p className="muted">Amenities are being updated.</p>
+                  <div>
+                    <Camera size={38} />
+                    <span>No images</span>
+                  </div>
                 )}
               </div>
-            </section>
+              <section className="content-section detail-main-section">
+                <div className="detail-price-row">
+                  <div>
+                    <p className="eyebrow">Price</p>
+                    <h2>
+                      {listing.price
+                        ? formatCurrency(listing.price, listing.currency)
+                        : "Price updating"}
+                    </h2>
+                  </div>
+                </div>
+                <div className="listing-key-facts">
+                  <span>
+                    <Ruler size={18} />
+                    <strong>{formatArea(listing.area)}</strong>
+                    <small>Area</small>
+                  </span>
+                  <span>
+                    <BedDouble size={18} />
+                    <strong>{listing.bedrooms ?? "-"}</strong>
+                    <small>Bedrooms</small>
+                  </span>
+                  <span>
+                    <Bath size={18} />
+                    <strong>{listing.bathrooms ?? "-"}</strong>
+                    <small>Bathrooms</small>
+                  </span>
+                  <span>
+                    <Building2 size={18} />
+                    <strong>{listing.purpose === "RENT" ? "Lease" : "Sale"}</strong>
+                    <small>Purpose</small>
+                  </span>
+                </div>
+                <div className="detail-description">
+                  <h2>Description</h2>
+                  <p>{listing.description}</p>
+                </div>
+                <div className="detail-amenities">
+                  <h2>Amenities</h2>
+                  {listing.amenities.length ? (
+                    <div className="amenity-grid">
+                      {listing.amenities.map((amenity) => (
+                        <span key={amenity.id}>
+                          <Home size={15} />
+                          {amenity.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="muted">Amenities are being updated.</p>
+                  )}
+                </div>
+              </section>
+            </div>
             <aside className="content-section contact-card">
               <p className="eyebrow">Contact</p>
               <h3>{listing.agent?.fullName ?? "Assigned agent"}</h3>
@@ -354,104 +383,113 @@ export function PublicListingDetailPage() {
                   <Link to="/login">Login to save this listing</Link>
                 </Button>
               ) : null}
-              <form className="listing-contact-form" onSubmit={submitInquiry}>
-                <div className="section-header compact">
-                  <div>
-                    <p className="eyebrow">Inquiry</p>
-                    <h3>Send a question</h3>
-                  </div>
-                </div>
-                <Input
-                  label={t("common.fullName")}
-                  value={inquiryDraft.fullName}
-                  onChange={(event) => updateInquiryDraft("fullName", event.target.value)}
-                  required
-                />
-                <Input
-                  label={t("common.email")}
-                  type="email"
-                  value={inquiryDraft.email}
-                  onChange={(event) => updateInquiryDraft("email", event.target.value)}
-                  required
-                />
-                <Input
-                  label={t("common.phone")}
-                  value={inquiryDraft.phone}
-                  onChange={(event) => updateInquiryDraft("phone", event.target.value)}
-                />
-                <Select
-                  label={t("common.preferredContact")}
-                  options={contactMethodOptions}
-                  value={inquiryDraft.preferredContactMethod}
-                  onChange={(event) => updateInquiryDraft("preferredContactMethod", event.target.value)}
-                />
-                <label className="field">
-                  <span>Message</span>
-                  <textarea
-                    className="input textarea"
-                    value={inquiryDraft.message}
-                    onChange={(event) => updateInquiryDraft("message", event.target.value)}
+              <div className="listing-contact-tabs" role="tablist" aria-label="Listing contact forms">
+                <button
+                  type="button"
+                  className={activeContactTab === "appointment" ? "is-active" : ""}
+                  onClick={() => setActiveContactTab("appointment")}
+                >
+                  <CalendarDays size={16} />
+                  Request viewing
+                </button>
+                <button
+                  type="button"
+                  className={activeContactTab === "inquiry" ? "is-active" : ""}
+                  onClick={() => setActiveContactTab("inquiry")}
+                >
+                  <Mail size={16} />
+                  Send question
+                </button>
+              </div>
+              {activeContactTab === "inquiry" ? (
+                <form className="listing-contact-form" onSubmit={submitInquiry}>
+                  <Input
+                    label={t("common.fullName")}
+                    value={inquiryDraft.fullName}
+                    onChange={(event) => updateInquiryDraft("fullName", event.target.value)}
                     required
                   />
-                </label>
-                {inquiryError ? <p className="form-alert">{inquiryError.message}</p> : null}
-                {inquirySent ? <p className="form-success">Inquiry sent.</p> : null}
-                <Button type="submit" disabled={inquiryMutation.isPending}>
-                  Send inquiry
-                </Button>
-              </form>
-              <form className="listing-contact-form" onSubmit={submitAppointment}>
-                <div className="section-header compact">
-                  <div>
-                    <p className="eyebrow">Viewing</p>
-                    <h3>Request appointment</h3>
-                  </div>
-                </div>
-                <Input
-                  label={t("common.fullName")}
-                  value={appointmentDraft.fullName}
-                  onChange={(event) => updateAppointmentDraft("fullName", event.target.value)}
-                  required
-                />
-                <Input
-                  label={t("common.email")}
-                  type="email"
-                  value={appointmentDraft.email}
-                  onChange={(event) => updateAppointmentDraft("email", event.target.value)}
-                  required
-                />
-                <Input
-                  label={t("common.phone")}
-                  value={appointmentDraft.phone}
-                  onChange={(event) => updateAppointmentDraft("phone", event.target.value)}
-                />
-                <Input
-                  label="Preferred start"
-                  type="datetime-local"
-                  value={appointmentDraft.preferredStartAt}
-                  onChange={(event) => updateAppointmentDraft("preferredStartAt", event.target.value)}
-                  required
-                />
-                <Input
-                  label="Preferred end"
-                  type="datetime-local"
-                  value={appointmentDraft.preferredEndAt}
-                  onChange={(event) => updateAppointmentDraft("preferredEndAt", event.target.value)}
-                />
-                <label className="field">
-                  <span>Notes</span>
-                  <textarea
-                    className="input textarea"
-                    value={appointmentDraft.message}
-                    onChange={(event) => updateAppointmentDraft("message", event.target.value)}
+                  <Input
+                    label={t("common.email")}
+                    type="email"
+                    value={inquiryDraft.email}
+                    onChange={(event) => updateInquiryDraft("email", event.target.value)}
+                    required
                   />
-                </label>
-                {appointmentError ? <p className="form-alert">{appointmentError.message}</p> : null}
-                {appointmentSent ? <p className="form-success">Appointment request sent.</p> : null}
-                <Button type="submit" disabled={appointmentMutation.isPending}>
-                  Request viewing
-                </Button>
-              </form>
+                  <Input
+                    label={t("common.phone")}
+                    value={inquiryDraft.phone}
+                    onChange={(event) => updateInquiryDraft("phone", event.target.value)}
+                  />
+                  <Select
+                    label={t("common.preferredContact")}
+                    options={contactMethodOptions}
+                    value={inquiryDraft.preferredContactMethod}
+                    onChange={(event) => updateInquiryDraft("preferredContactMethod", event.target.value)}
+                  />
+                  <label className="field">
+                    <span>Message</span>
+                    <textarea
+                      className="input textarea"
+                      value={inquiryDraft.message}
+                      onChange={(event) => updateInquiryDraft("message", event.target.value)}
+                      required
+                    />
+                  </label>
+                  {inquiryError ? <p className="form-alert">{inquiryError.message}</p> : null}
+                  {inquirySent ? <p className="form-success">Inquiry sent.</p> : null}
+                  <Button type="submit" disabled={inquiryMutation.isPending}>
+                    Send inquiry
+                  </Button>
+                </form>
+              ) : (
+                <form className="listing-contact-form" onSubmit={submitAppointment}>
+                  <Input
+                    label={t("common.fullName")}
+                    value={appointmentDraft.fullName}
+                    onChange={(event) => updateAppointmentDraft("fullName", event.target.value)}
+                    required
+                  />
+                  <Input
+                    label={t("common.email")}
+                    type="email"
+                    value={appointmentDraft.email}
+                    onChange={(event) => updateAppointmentDraft("email", event.target.value)}
+                    required
+                  />
+                  <Input
+                    label={t("common.phone")}
+                    value={appointmentDraft.phone}
+                    onChange={(event) => updateAppointmentDraft("phone", event.target.value)}
+                  />
+                  <Input
+                    label="Preferred start"
+                    type="datetime-local"
+                    value={appointmentDraft.preferredStartAt}
+                    onChange={(event) => updateAppointmentDraft("preferredStartAt", event.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Preferred end"
+                    type="datetime-local"
+                    value={appointmentDraft.preferredEndAt}
+                    onChange={(event) => updateAppointmentDraft("preferredEndAt", event.target.value)}
+                  />
+                  <label className="field">
+                    <span>Notes</span>
+                    <textarea
+                      className="input textarea"
+                      value={appointmentDraft.message}
+                      onChange={(event) => updateAppointmentDraft("message", event.target.value)}
+                    />
+                  </label>
+                  {appointmentError ? <p className="form-alert">{appointmentError.message}</p> : null}
+                  {appointmentSent ? <p className="form-success">Appointment request sent.</p> : null}
+                  <Button type="submit" disabled={appointmentMutation.isPending}>
+                    Request viewing
+                  </Button>
+                </form>
+              )}
             </aside>
           </div>
         </>
