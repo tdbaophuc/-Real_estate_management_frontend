@@ -1,68 +1,47 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Save } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import { getLeadSources } from "../master-data/masterDataApi";
 import type { CustomerRecord, CustomerUpsertRequest } from "./customerApi";
 
-const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
+const optionalNumber = (message: string) =>
+  z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), message);
 
-const customerFormSchema = z
-  .object({
-    assignedAgentId: optionalNumber,
-    code: z.string().trim().min(2, "Code is required"),
-    email: z.string().trim().email("Use a valid email").or(z.literal("")),
-    fullName: z.string().trim().min(2, "Full name is required"),
-    notes: z.string().trim().optional(),
-    phone: z.string().trim().optional(),
-    preferredContactMethod: z.string().trim().optional(),
-    priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
-    source: z.enum(["MANUAL", "WEBSITE", "REFERRAL", "IMPORT", "OTHER"]),
-    status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]),
-    userId: optionalNumber
-  })
-  .superRefine((values, context) => {
-    if (!values.email && !values.phone && !values.userId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Provide at least email, phone, or user id.",
-        path: ["email"]
-      });
-    }
-  });
+function createCustomerFormSchema(t: (key: string) => string) {
+  return z
+    .object({
+      assignedAgentId: optionalNumber(t("validation.numberRequired")),
+      code: z.string().trim().min(2, t("validation.codeRequired")),
+      email: z.string().trim().email(t("validation.validEmail")).or(z.literal("")),
+      fullName: z.string().trim().min(2, t("validation.fullNameRequired")),
+      notes: z.string().trim().optional(),
+      phone: z.string().trim().optional(),
+      preferredContactMethod: z.string().trim().optional(),
+      priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
+      source: z.string().trim().min(1, t("validation.sourceRequired")),
+      status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]),
+      userId: optionalNumber(t("validation.numberRequired"))
+    })
+    .superRefine((values, context) => {
+      if (!values.email && !values.phone && !values.userId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: t("validation.emailOrPhoneOrUserRequired"),
+          path: ["email"]
+        });
+      }
+    });
+}
 
-export type CustomerFormValues = z.infer<typeof customerFormSchema>;
-
-const statusOptions = [
-  { label: "Active", value: "ACTIVE" },
-  { label: "Inactive", value: "INACTIVE" },
-  { label: "Archived", value: "ARCHIVED" }
-];
-
-const sourceOptions = [
-  { label: "Manual", value: "MANUAL" },
-  { label: "Website", value: "WEBSITE" },
-  { label: "Referral", value: "REFERRAL" },
-  { label: "Import", value: "IMPORT" },
-  { label: "Other", value: "OTHER" }
-];
-
-const priorityOptions = [
-  { label: "Low", value: "LOW" },
-  { label: "Medium", value: "MEDIUM" },
-  { label: "High", value: "HIGH" }
-];
-
-const contactOptions = [
-  { label: "Phone", value: "PHONE" },
-  { label: "Email", value: "EMAIL" },
-  { label: "Zalo", value: "ZALO" },
-  { label: "Any", value: "ANY" }
-];
+export type CustomerFormValues = z.infer<ReturnType<typeof createCustomerFormSchema>>;
 
 function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
@@ -94,13 +73,7 @@ function toDefaultValues(customer?: CustomerRecord): CustomerFormValues {
     phone: customer?.phone ?? "",
     preferredContactMethod: customer?.preferredContactMethod ?? "PHONE",
     priority: customer?.priority === "LOW" || customer?.priority === "HIGH" ? customer.priority : "MEDIUM",
-    source:
-      customer?.source === "WEBSITE" ||
-      customer?.source === "REFERRAL" ||
-      customer?.source === "IMPORT" ||
-      customer?.source === "OTHER"
-        ? customer.source
-        : "MANUAL",
+    source: customer?.source ?? "MANUAL",
     status:
       customer?.status === "INACTIVE" || customer?.status === "ARCHIVED"
         ? customer.status
@@ -127,8 +100,65 @@ export function CustomerForm({
   onSubmit: (values: CustomerFormValues) => Promise<void>;
   submitLabel: string;
 }) {
+  const { t } = useTranslation();
   const [formError, setFormError] = useState<string | null>(null);
   const defaultValues = useMemo(() => toDefaultValues(customer), [customer]);
+  const customerFormSchema = useMemo(() => createCustomerFormSchema(t), [t]);
+  const statusOptions = useMemo(
+    () => [
+      { label: t("status.active"), value: "ACTIVE" },
+      { label: t("status.inactive"), value: "INACTIVE" },
+      { label: t("common.archived"), value: "ARCHIVED" }
+    ],
+    [t]
+  );
+  const sourceOptions = useMemo(
+    () => [
+      { label: t("common.manual"), value: "MANUAL" },
+      { label: t("common.website"), value: "WEBSITE" },
+      { label: t("common.referral"), value: "REFERRAL" },
+      { label: t("common.import"), value: "IMPORT" },
+      { label: t("common.other"), value: "OTHER" }
+    ],
+    [t]
+  );
+  const priorityOptions = useMemo(
+    () => [
+      { label: t("common.low"), value: "LOW" },
+      { label: t("common.medium"), value: "MEDIUM" },
+      { label: t("common.high"), value: "HIGH" }
+    ],
+    [t]
+  );
+  const contactOptions = useMemo(
+    () => [
+      { label: t("common.phone"), value: "PHONE" },
+      { label: t("common.email"), value: "EMAIL" },
+      { label: "Zalo", value: "ZALO" },
+      { label: t("common.any"), value: "ANY" }
+    ],
+    [t]
+  );
+  const leadSourcesQuery = useQuery({
+    queryFn: getLeadSources,
+    queryKey: ["master-data", "lead-sources"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const resolvedSourceOptions = useMemo(() => {
+    const options = leadSourcesQuery.data?.length
+      ? leadSourcesQuery.data.map((source) => ({
+          label: source.name,
+          value: source.code
+        }))
+      : sourceOptions;
+
+    if (defaultValues.source && !options.some((option) => option.value === defaultValues.source)) {
+      return [...options, { label: t("common.currentValue", { value: defaultValues.source }), value: defaultValues.source }];
+    }
+
+    return options;
+  }, [defaultValues.source, leadSourcesQuery.data, sourceOptions, t]);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -166,27 +196,33 @@ export function CustomerForm({
 
   return (
     <form className="property-form" onSubmit={submit}>
-      <FormSection title="Profile">
-        <Input label="Code" error={errors.code?.message} {...register("code")} />
-        <Input label="Full name" error={errors.fullName?.message} {...register("fullName")} />
-        <Select label="Status" options={statusOptions} error={errors.status?.message} {...register("status")} />
-        <Select label="Priority" options={priorityOptions} error={errors.priority?.message} {...register("priority")} />
+      <FormSection title={t("common.profile")}>
+        <Input label={t("common.code")} error={errors.code?.message} {...register("code")} />
+        <Input label={t("common.fullName")} error={errors.fullName?.message} {...register("fullName")} />
+        <Select label={t("common.status")} options={statusOptions} error={errors.status?.message} {...register("status")} />
+        <Select label={t("common.priority")} options={priorityOptions} error={errors.priority?.message} {...register("priority")} />
       </FormSection>
-      <FormSection title="Contact">
-        <Input label="Email" error={errors.email?.message} {...register("email")} />
-        <Input label="Phone" error={errors.phone?.message} {...register("phone")} />
-        <Input label="User id" error={errors.userId?.message} {...register("userId")} />
+      <FormSection title={t("common.contact")}>
+        <Input label={t("common.email")} error={errors.email?.message} {...register("email")} />
+        <Input label={t("common.phone")} error={errors.phone?.message} {...register("phone")} />
+        <Input label={t("common.userId")} error={errors.userId?.message} {...register("userId")} />
         <Select
-          label="Preferred contact"
+          label={t("common.preferredContact")}
           options={contactOptions}
           error={errors.preferredContactMethod?.message}
           {...register("preferredContactMethod")}
         />
       </FormSection>
-      <FormSection title="Ownership">
-        <Select label="Source" options={sourceOptions} error={errors.source?.message} {...register("source")} />
-        <Input label="Assigned agent id" error={errors.assignedAgentId?.message} {...register("assignedAgentId")} />
-        <Input label="Notes" error={errors.notes?.message} {...register("notes")} />
+      <FormSection title={t("customers.ownership")}>
+        <Select
+          label={t("common.source")}
+          options={resolvedSourceOptions}
+          error={errors.source?.message}
+          disabled={leadSourcesQuery.isLoading}
+          {...register("source")}
+        />
+        <Input label={t("common.assignedAgentId")} error={errors.assignedAgentId?.message} {...register("assignedAgentId")} />
+        <Input label={t("common.notes")} error={errors.notes?.message} {...register("notes")} />
       </FormSection>
       {formError ? <p className="form-alert">{formError}</p> : null}
       <div className="form-actions">

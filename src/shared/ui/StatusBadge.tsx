@@ -1,4 +1,5 @@
 import { cn } from "../lib/cn";
+import { useText } from "../i18n/useText";
 
 type StatusTone = "neutral" | "success" | "warning" | "danger" | "info";
 
@@ -8,6 +9,7 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ children, tone = "neutral" }: StatusBadgeProps) {
-  return <span className={cn("status-badge", `status-${tone}`)}>{children}</span>;
-}
+  const tx = useText();
 
+  return <span className={cn("status-badge", `status-${tone}`)}>{tx(children)}</span>;
+}

@@ -8,14 +8,23 @@ export type PublicListingSearchParams = {
   areaMin?: string;
   bathrooms?: string;
   bedrooms?: string;
+  direction?: "ASC" | "DESC";
+  districtId?: string;
   keyword?: string;
+  maxArea?: string;
+  maxPrice?: string;
+  minArea?: string;
+  minPrice?: string;
   page: number;
   priceMax?: string;
   priceMin?: string;
+  propertyTypeId?: string;
+  provinceId?: string;
   purpose?: ListingPurpose | "";
   size: number;
   sortBy?: string;
   sortDirection?: "ASC" | "DESC";
+  wardId?: string;
 };
 
 export type PublicListing = {
@@ -26,7 +35,9 @@ export type PublicListing = {
   coverImageUrl: string | null;
   currency: string;
   id: number | string;
+  images: PublicListingImage[];
   price: number | null;
+  propertyTypeName: string;
   purpose: ListingPurpose | null;
   slug: string;
   status: string;
@@ -45,9 +56,18 @@ export type ListingAgent = {
   phone?: string;
 };
 
+export type PublicListingImage = {
+  altText?: string;
+  coverImage?: boolean;
+  displayOrder?: number | null;
+  id: number | string;
+  imageUrl: string;
+};
+
 export type GalleryImage = {
   alt?: string;
   id: number | string;
+  imageUrl: string;
   url: string;
 };
 
@@ -57,6 +77,23 @@ export type PublicListingDetail = PublicListing & {
   description: string;
   images: GalleryImage[];
   isFavorite: boolean;
+};
+
+export type ListingInquiryRequest = {
+  email: string;
+  fullName: string;
+  message: string;
+  phone?: string;
+  preferredContactMethod?: string;
+};
+
+export type ListingAppointmentRequest = {
+  email: string;
+  fullName: string;
+  message?: string;
+  phone?: string;
+  preferredEndAt?: string;
+  preferredStartAt: string;
 };
 
 type BackendListing = Record<string, unknown>;
@@ -108,8 +145,30 @@ function readBoolean(source: BackendListing, keys: string[]) {
   return false;
 }
 
+function readRecordArray(source: BackendListing | null, keys: string[]) {
+  if (!source) {
+    return [];
+  }
+
+  for (const key of keys) {
+    const value = source[key];
+
+    if (Array.isArray(value)) {
+      return value.filter((item): item is BackendListing => Boolean(item) && typeof item === "object");
+    }
+  }
+
+  return [];
+}
+
 function readAddress(source: BackendListing) {
-  const directAddress = readString(source, ["address", "addressLine", "location"]);
+  const directAddress = readString(source, [
+    "address",
+    "fullAddress",
+    "addressLine",
+    "streetAddress",
+    "location"
+  ]);
 
   if (directAddress) {
     return directAddress;
@@ -121,7 +180,14 @@ function readAddress(source: BackendListing) {
   const addressSource = propertyAddress ?? address;
 
   if (!addressSource) {
-    return "Address updating";
+    const flatParts = [
+      readString(source, ["streetAddress", "street"]),
+      readString(source, ["wardName", "ward"]),
+      readString(source, ["districtName", "district"]),
+      readString(source, ["provinceName", "province"])
+    ].filter(Boolean);
+
+    return flatParts.length ? flatParts.join(", ") : "Address updating";
   }
 
   const parts = [
@@ -135,65 +201,54 @@ function readAddress(source: BackendListing) {
 }
 
 function readCoverImage(source: BackendListing) {
-  const directImage = readString(source, [
-    "coverImageUrl",
-    "coverImage",
-    "thumbnailUrl",
-    "imageUrl"
-  ]);
-
-  if (directImage) {
-    return directImage;
-  }
-
-  const property = readNestedRecord(source, "property");
-  const images = source.images ?? property?.images;
-
-  if (Array.isArray(images)) {
-    const image = images.find((item) => item && typeof item === "object") as
-      | BackendListing
-      | undefined;
-
-    return image
-      ? readString(image, ["url", "imageUrl", "fileUrl", "publicUrl"]) || null
-      : null;
-  }
-
-  return null;
+  return readString(source, ["coverImageUrl"]) || null;
 }
 
-function readGalleryImages(source: BackendListing): GalleryImage[] {
-  const property = readNestedRecord(source, "property");
-  const images = source.images ?? property?.images;
+function readImageUrl(image: BackendListing) {
+  return readString(image, ["imageUrl"]);
+}
 
-  if (!Array.isArray(images)) {
-    const coverImageUrl = readCoverImage(source);
+function readImageAlt(image: BackendListing, fallback: string) {
+  return readString(image, ["alt", "altText", "caption", "description", "title"], fallback);
+}
 
-    return coverImageUrl
-      ? [{ id: "cover", url: coverImageUrl, alt: readString(source, ["title", "name"]) }]
-      : [];
-  }
+function readImageId(image: BackendListing, fallback: string) {
+  return readNumber(image, ["id"]) ?? readString(image, ["id"], fallback);
+}
+
+function readPublicListingImages(source: BackendListing): PublicListingImage[] {
+  const images = readRecordArray(source, ["images"]);
 
   return images
-    .map((item, index): GalleryImage | null => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const image = item as BackendListing;
-      const url = readString(image, ["url", "imageUrl", "fileUrl", "publicUrl"]);
+    .map((item, index): PublicListingImage | null => {
+      const url = readImageUrl(item);
 
       if (!url) {
         return null;
       }
 
       return {
-        alt: readString(image, ["alt", "altText", "description"], readString(source, ["title", "name"])),
-        id: readNumber(image, ["id", "imageId"]) ?? readString(image, ["id", "imageId"], String(index)),
-        url
+        altText: readImageAlt(item, readString(source, ["title", "name"])),
+        coverImage: readBoolean(item, ["coverImage"]),
+        displayOrder: readNumber(item, ["displayOrder"]),
+        id: readImageId(item, String(index)),
+        imageUrl: url
       };
     })
-    .filter((image): image is GalleryImage => Boolean(image));
+    .filter((image): image is PublicListingImage => Boolean(image));
+}
+
+export function getPublicListingImageUrl(listing: Pick<PublicListing, "coverImageUrl" | "images">) {
+  return listing.coverImageUrl ?? listing.images[0]?.imageUrl ?? null;
+}
+
+function readGalleryImages(source: BackendListing): GalleryImage[] {
+  return readPublicListingImages(source).map((image) => ({
+    alt: image.altText,
+    id: image.id,
+    imageUrl: image.imageUrl,
+    url: image.imageUrl
+  }));
 }
 
 function readAmenities(source: BackendListing): ListingAmenity[] {
@@ -272,7 +327,9 @@ function normalizePublicListing(listing: BackendListing): PublicListing {
     coverImageUrl: readCoverImage(listing),
     currency: readString(listing, ["currency"], "VND"),
     id: id || readString(listing, ["slug"], title),
+    images: readPublicListingImages(listing),
     price: readNumber(listing, ["askingPrice", "price"]),
+    propertyTypeName: readString(listing, ["propertyTypeName"], "Property"),
     purpose,
     slug: readString(listing, ["slug"], String(id || title)),
     status: readString(listing, ["status", "listingStatus"], "PUBLISHED"),
@@ -293,29 +350,29 @@ function normalizePublicListingDetail(listing: BackendListing): PublicListingDet
       readString(listing, ["description", "content"]) ||
       readString(property, ["description"]) ||
       "Listing description is being updated.",
-    images: images.length
-      ? images
-      : normalizedListing.coverImageUrl
-        ? [{ id: "cover", url: normalizedListing.coverImageUrl, alt: normalizedListing.title }]
-        : [],
+    images,
     isFavorite: readBoolean(listing, ["isFavorite", "favorite", "favorited"])
   };
 }
 
 function toQueryParams(params: PublicListingSearchParams): QueryParams {
   return {
-    areaMax: params.areaMax,
-    areaMin: params.areaMin,
     bathrooms: params.bathrooms,
     bedrooms: params.bedrooms,
+    direction: params.direction ?? params.sortDirection,
+    districtId: params.districtId,
     keyword: params.keyword,
+    maxArea: params.maxArea ?? params.areaMax,
+    maxPrice: params.maxPrice ?? params.priceMax,
+    minArea: params.minArea ?? params.areaMin,
+    minPrice: params.minPrice ?? params.priceMin,
     page: params.page,
-    priceMax: params.priceMax,
-    priceMin: params.priceMin,
+    propertyTypeId: params.propertyTypeId,
+    provinceId: params.provinceId,
     purpose: params.purpose,
     size: params.size,
     sortBy: params.sortBy,
-    sortDirection: params.sortDirection
+    wardId: params.wardId
   };
 }
 
@@ -376,4 +433,21 @@ export function addListingFavorite(listingId: number | string) {
 
 export function removeListingFavorite(listingId: number | string) {
   return apiClient.delete<void>(`/listings/${listingId}/favorite`);
+}
+
+export function createListingInquiry(listingId: number | string, request: ListingInquiryRequest) {
+  return apiClient.post<void>(
+    `/search/listings/${encodeURIComponent(String(listingId))}/inquiries`,
+    request
+  );
+}
+
+export function createListingAppointmentRequest(
+  listingId: number | string,
+  request: ListingAppointmentRequest
+) {
+  return apiClient.post<void>(
+    `/search/listings/${encodeURIComponent(String(listingId))}/appointment-requests`,
+    request
+  );
 }

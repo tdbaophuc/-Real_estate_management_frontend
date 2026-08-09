@@ -2,19 +2,36 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
+  ArrowRight,
+  AlertTriangle,
   BarChart3,
-  Bot,
+  Bell,
+  Building2,
   CalendarDays,
+  CheckCircle2,
+  FileText,
   Heart,
   Home,
   LayoutDashboard,
+  MapPin,
+  Search,
   Users
 } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
-import { getFavoriteListings } from "../public-listings/publicListingApi";
+import { useText } from "../../shared/i18n/useText";
+import { formatCurrency, formatDate } from "../../shared/lib/format";
+import { getUnreadNotificationCount } from "../notifications/notificationApi";
+import {
+  getFavoriteListings,
+  searchPublicListings,
+  type PublicListing
+} from "../public-listings/publicListingApi";
+import { searchContracts } from "../contracts/contractApi";
+import { searchFollowUpTasks } from "../follow-up-tasks/followUpTaskApi";
+import { searchListings } from "../listings/listingApi";
 import { getRoleDashboard, type DashboardRole } from "./dashboardApi";
 
 const rolePriority: DashboardRole[] = ["ADMIN", "MANAGER", "AGENT"];
@@ -35,79 +52,338 @@ function DashboardSkeleton() {
   );
 }
 
+function CustomerListingPreview({ listing }: { listing: PublicListing }) {
+  const tx = useText();
+
+  return (
+    <Link className="customer-listing-preview" to={`/listing/${listing.slug}`}>
+      <div
+        className="customer-listing-media"
+        style={listing.coverImageUrl ? { backgroundImage: `url(${listing.coverImageUrl})` } : undefined}
+      >
+        {!listing.coverImageUrl ? <Home size={18} /> : null}
+      </div>
+      <span>
+        <strong>{listing.title}</strong>
+        <small>
+          <MapPin size={14} />
+          {listing.address}
+        </small>
+      </span>
+      <b>{listing.price ? formatCurrency(listing.price, listing.currency) : tx("Price updating")}</b>
+    </Link>
+  );
+}
+
 function CustomerDashboard() {
+  const tx = useText();
   const favoritesQuery = useQuery({
-    queryFn: () => getFavoriteListings({ page: 0, size: 1 }),
+    queryFn: () => getFavoriteListings({ page: 0, size: 3 }),
     queryKey: ["favorite-listings", "dashboard"],
     retry: 1
   });
+  const unreadQuery = useQuery({
+    queryFn: getUnreadNotificationCount,
+    queryKey: ["notifications", "unread-count", "customer-dashboard"],
+    retry: 1
+  });
+  const recommendationsQuery = useQuery({
+    queryFn: () =>
+      searchPublicListings({
+        page: 0,
+        size: 3,
+        sortBy: "publishedAt",
+        sortDirection: "DESC"
+      }),
+    queryKey: ["public-listings", "customer-dashboard-recommendations"],
+    retry: 1
+  });
+  const favoriteListings = favoritesQuery.data?.content ?? [];
+  const recommendationListings = recommendationsQuery.data?.content ?? [];
+  const unreadCount = unreadQuery.data ?? 0;
 
   return (
-    <section className="dashboard">
-      <div className="section-header">
+    <section className="customer-portal">
+      <div className="customer-portal-hero">
         <div>
-          <p className="eyebrow">Dashboard</p>
-          <h2>Customer dashboard</h2>
+          <p className="eyebrow">{tx("Customer portal")}</p>
+          <h2>{tx("Your property workspace")}</h2>
+          <p className="muted">
+            {tx("Review saved listings, compare options, and request the next viewing with a focused customer portal.")}
+          </p>
+        </div>
+        <div className="customer-portal-actions">
+          <Button asChild>
+            <Link to="/search">
+              <Search size={16} />
+              {tx("Browse listings")}
+            </Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link to="/favorites">
+              <Heart size={16} />
+              {tx("Saved shortlist")}
+            </Link>
+          </Button>
         </div>
       </div>
-      <div className="metric-grid">
-        <article className="metric-card">
-          <Heart size={20} />
-          <span>Saved listings</span>
-          <strong>
-            {favoritesQuery.data
-              ? favoritesQuery.data.totalElements.toLocaleString("vi-VN")
-              : "0"}
-          </strong>
-        </article>
-        <article className="metric-card">
-          <Bot size={20} />
-          <span>AI assistant</span>
-          <strong>Ready</strong>
-        </article>
-        <article className="metric-card">
-          <CalendarDays size={20} />
-          <span>Appointments</span>
-          <strong>Shortcut</strong>
-        </article>
-      </div>
-      {favoritesQuery.error ? (
-        <div className="content-section">
-          <EmptyState
-            title="Favorites summary could not be loaded"
-            description={normalizeUnknownError(favoritesQuery.error).message}
-            action={<Button onClick={() => favoritesQuery.refetch()}>Retry</Button>}
-          />
-        </div>
-      ) : null}
-      <div className="dashboard-actions">
+
+      <div className="customer-action-strip" aria-label={tx("Customer next actions")}>
+        <Link to="/search">
+          <Search size={18} />
+          <span>
+            <strong>{tx("Find a property")}</strong>
+            <small>{tx("Search by budget, room count, and location.")}</small>
+          </span>
+        </Link>
         <Link to="/favorites">
           <Heart size={18} />
           <span>
-            <strong>Favorites</strong>
-            Saved homes and listing detail shortcuts.
+            <strong>{tx("Review shortlist")}</strong>
+            <small>
+              {tx("Saved listings")}
+              {": "}
+              {favoritesQuery.data
+                ? favoritesQuery.data.totalElements.toLocaleString("vi-VN")
+                : "0"}
+            </small>
           </span>
         </Link>
-        <Link to="/ai">
-          <Bot size={18} />
-          <span>
-            <strong>AI assistant</strong>
-            Ask for listing recommendations and buying guidance.
-          </span>
-        </Link>
-        <Link to="/appointments">
-          <CalendarDays size={18} />
-          <span>
-            <strong>Appointments</strong>
-            Open appointment workflow when it becomes available.
-          </span>
-        </Link>
+      </div>
+
+      {favoritesQuery.error ? (
+        <div className="content-section">
+          <EmptyState
+            title={tx("Favorites summary could not be loaded")}
+            description={normalizeUnknownError(favoritesQuery.error).message}
+            action={<Button onClick={() => favoritesQuery.refetch()}>{tx("Retry")}</Button>}
+          />
+        </div>
+      ) : null}
+
+      <div className="customer-workspace-grid">
+        <section className="customer-panel">
+          <div className="customer-panel-heading">
+            <div>
+              <p className="eyebrow">{tx("Saved shortlist")}</p>
+              <h3>{tx("Homes you are reviewing")}</h3>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/favorites">
+                {tx("View all")}
+                <ArrowRight size={15} />
+              </Link>
+            </Button>
+          </div>
+          {favoritesQuery.isLoading ? (
+            <div className="customer-preview-stack">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div className="customer-listing-preview customer-preview-skeleton" key={index} />
+              ))}
+            </div>
+          ) : null}
+          {!favoritesQuery.isLoading && favoriteListings.length === 0 ? (
+            <EmptyState
+              title={tx("No saved listings yet")}
+              description={tx("Start by saving listings that match your budget and preferred locations.")}
+              action={
+                <Button asChild>
+                  <Link to="/search">{tx("Browse listings")}</Link>
+                </Button>
+              }
+            />
+          ) : null}
+          {favoriteListings.length > 0 ? (
+            <div className="customer-preview-stack">
+              {favoriteListings.map((listing) => (
+                <CustomerListingPreview listing={listing} key={listing.id} />
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <aside className="customer-panel customer-next-panel">
+          <div className="customer-panel-heading">
+            <div>
+              <p className="eyebrow">{tx("Next steps")}</p>
+              <h3>{tx("Stay ready for a viewing")}</h3>
+            </div>
+          </div>
+          <div className="customer-status-row">
+            <Bell size={18} />
+            <span>
+              <strong>{tx("Notification inbox")}</strong>
+              <small>
+                {unreadCount > 0
+                  ? tx("Unread updates")
+                  : tx("No unread updates")}
+              </small>
+            </span>
+            <b>{unreadCount > 99 ? "99+" : unreadCount}</b>
+          </div>
+          <Link className="customer-status-row" to="/account">
+            <CheckCircle2 size={18} />
+            <span>
+              <strong>{tx("Profile and preferences")}</strong>
+              <small>{tx("Keep your contact details current before requesting a viewing.")}</small>
+            </span>
+          </Link>
+        </aside>
+      </div>
+
+      <section className="customer-panel">
+        <div className="customer-panel-heading">
+          <div>
+            <p className="eyebrow">{tx("Recommended next")}</p>
+            <h3>{tx("Market-ready listings to review")}</h3>
+          </div>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/search">
+              {tx("Browse all")}
+              <ArrowRight size={15} />
+            </Link>
+          </Button>
+        </div>
+        {recommendationsQuery.isLoading ? (
+          <div className="customer-recommendation-grid">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div className="customer-listing-preview customer-preview-skeleton" key={index} />
+            ))}
+          </div>
+        ) : null}
+        {recommendationListings.length > 0 ? (
+          <div className="customer-recommendation-grid">
+            {recommendationListings.map((listing) => (
+              <CustomerListingPreview listing={listing} key={listing.id} />
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </section>
+  );
+}
+
+function ManagerAlertPanel() {
+  const tx = useText();
+  const nowIso = useMemo(() => new Date().toISOString(), []);
+  const pendingListingsQuery = useQuery({
+    queryFn: () =>
+      searchListings({
+        page: 0,
+        size: 3,
+        sortBy: "submittedAt",
+        sortDirection: "ASC",
+        status: "PENDING_REVIEW"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "pending-listings"],
+    retry: 1
+  });
+  const pendingContractsQuery = useQuery({
+    queryFn: () =>
+      searchContracts({
+        page: 0,
+        size: 3,
+        status: "PENDING_REVIEW"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "pending-contracts"],
+    retry: 1
+  });
+  const overdueTasksQuery = useQuery({
+    queryFn: () =>
+      searchFollowUpTasks({
+        dueTo: nowIso,
+        page: 0,
+        size: 3,
+        sortBy: "dueAt",
+        sortDirection: "ASC",
+        status: "PENDING"
+      }),
+    queryKey: ["dashboard", "manager-alerts", "overdue-tasks", nowIso],
+    retry: 1
+  });
+  const alerts = [
+    {
+      count: pendingListingsQuery.data?.totalElements ?? 0,
+      href: "/listings/review-queue",
+      icon: Building2,
+      isLoading: pendingListingsQuery.isLoading,
+      label: tx("Listings pending review"),
+      records: (pendingListingsQuery.data?.content ?? []).map((listing) => ({
+        detail: listing.submittedAt ? formatDate(listing.submittedAt) : listing.status,
+        href: `/listings/${listing.id}`,
+        title: listing.title
+      }))
+    },
+    {
+      count: pendingContractsQuery.data?.totalElements ?? 0,
+      href: "/contracts",
+      icon: FileText,
+      isLoading: pendingContractsQuery.isLoading,
+      label: tx("Contracts pending review"),
+      records: (pendingContractsQuery.data?.content ?? []).map((contract) => ({
+        detail: contract.propertyAddress || contract.code,
+        href: `/contracts/${contract.id}`,
+        title: contract.title
+      }))
+    },
+    {
+      count: overdueTasksQuery.data?.totalElements ?? 0,
+      href: "/follow-up-tasks",
+      icon: AlertTriangle,
+      isLoading: overdueTasksQuery.isLoading,
+      label: tx("Overdue follow-up tasks"),
+      records: (overdueTasksQuery.data?.content ?? []).map((task) => ({
+        detail: task.dueAt ? formatDate(task.dueAt) : task.status,
+        href: `/follow-up-tasks`,
+        title: task.title
+      }))
+    }
+  ];
+
+  return (
+    <section className="manager-alert-panel">
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">{tx("Operations watchlist")}</p>
+          <h3>{tx("Review items that need manager action")}</h3>
+        </div>
+      </div>
+      <div className="manager-alert-grid">
+        {alerts.map((alert) => {
+          const Icon = alert.icon;
+
+          return (
+            <article className="manager-alert-card" key={alert.href}>
+              <Link className="manager-alert-card-heading" to={alert.href}>
+                <Icon size={18} />
+                <span>
+                  <strong>{alert.isLoading ? "--" : alert.count.toLocaleString("vi-VN")}</strong>
+                  <small>{alert.label}</small>
+                </span>
+                <ArrowRight size={15} />
+              </Link>
+              <div className="manager-alert-list">
+                {alert.records.length ? (
+                  alert.records.map((record) => (
+                    <Link to={record.href} key={`${alert.href}-${record.href}-${record.title}`}>
+                      <span>{record.title}</span>
+                      <small>{record.detail}</small>
+                    </Link>
+                  ))
+                ) : (
+                  <p className="muted">{alert.isLoading ? tx("Loading") : tx("No records returned by API.")}</p>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
 export function DashboardPage() {
+  const tx = useText();
   const { user } = useAuth();
   const roles = user?.roles ?? [];
   const dashboardRole = useMemo(() => getDashboardRole(roles), [roles]);
@@ -129,18 +405,18 @@ export function DashboardPage() {
     <section className="dashboard">
       <div className="section-header">
         <div>
-          <p className="eyebrow">Dashboard</p>
+          <p className="eyebrow">{tx("Dashboard")}</p>
           <h2>{dashboardQuery.data?.title ?? `${dashboardRole} dashboard`}</h2>
-          <p className="muted">{dashboardQuery.data?.summary ?? "Loading dashboard metrics."}</p>
+          <p className="muted">{dashboardQuery.data?.summary ?? tx("Loading dashboard metrics.")}</p>
         </div>
       </div>
       {dashboardQuery.isLoading ? <DashboardSkeleton /> : null}
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Dashboard could not be loaded"
+            title={tx("Dashboard could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => dashboardQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => dashboardQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
@@ -169,6 +445,7 @@ export function DashboardPage() {
               </Link>
             ))}
           </div>
+          {dashboardRole === "MANAGER" ? <ManagerAlertPanel /> : null}
         </>
       ) : null}
     </section>

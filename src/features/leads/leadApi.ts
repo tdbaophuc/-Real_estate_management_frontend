@@ -16,17 +16,22 @@ export type LeadActivityType = "ASSIGNMENT" | "CALL" | "CHAT" | "EMAIL" | "MEETI
 
 export type LeadRecord = {
   assignedAgentId: number | null;
+  assignedAgentName: string;
   code: string;
   customerId: number | null;
+  customerName: string;
   email: string;
   fullName: string;
   id: number | string;
   listingId: number | null;
+  listingTitle: string;
   message: string;
   phone: string;
   pipelineStatus: LeadPipelineStatus | string;
   priority: LeadPriority | string;
+  score: number | null;
   sourceCode: string;
+  sourceName: string;
 };
 
 export type LeadNote = {
@@ -43,8 +48,11 @@ export type LeadActivity = {
 };
 
 export type FollowUpTask = {
+  description: string;
   dueAt: string;
   id: number | string;
+  priority: string;
+  status: string;
   title: string;
 };
 
@@ -62,6 +70,18 @@ export type LeadSearchParams = {
   status?: string;
 };
 
+export type LeadCreateRequest = {
+  assignedAgentId?: number;
+  customerId?: number;
+  email?: string;
+  fullName: string;
+  listingId?: number;
+  message?: string;
+  phone?: string;
+  priority?: LeadPriority | string;
+  sourceCode?: string;
+};
+
 export type LeadScore = {
   priority: string;
   reasons: string[];
@@ -70,6 +90,14 @@ export type LeadScore = {
 };
 
 type BackendRecord = Record<string, unknown>;
+
+function readNestedRecord(source: BackendRecord, key: string) {
+  const value = source[key];
+
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as BackendRecord)
+    : null;
+}
 
 function readString(source: BackendRecord, keys: string[], fallback = "") {
   for (const key of keys) {
@@ -116,17 +144,22 @@ function normalizeLead(source: BackendRecord): LeadRecord {
 
   return {
     assignedAgentId: readNumber(source, ["assignedAgentId", "agentId"]),
+    assignedAgentName: readString(source, ["assignedAgentName", "agentName", "assigneeName"]),
     code: readString(source, ["code"], String(id || "LEAD")),
     customerId: readNumber(source, ["customerId"]),
+    customerName: readString(source, ["customerName"]),
     email: readString(source, ["email"]),
     fullName: readString(source, ["fullName", "name"], "Unnamed lead"),
     id: id || readString(source, ["code", "email", "phone"]),
     listingId: readNumber(source, ["listingId"]),
+    listingTitle: readString(source, ["listingTitle", "listingName"]),
     message: readString(source, ["message", "notes", "description"]),
     phone: readString(source, ["phone", "phoneNumber"]),
     pipelineStatus: readString(source, ["pipelineStatus", "status"], "NEW"),
     priority: readString(source, ["priority"], "MEDIUM"),
-    sourceCode: readString(source, ["sourceCode", "source"], "MANUAL")
+    score: readNumber(source, ["score", "leadScore"]),
+    sourceCode: readString(source, ["sourceCode", "source"], "MANUAL"),
+    sourceName: readString(source, ["sourceName"])
   };
 }
 
@@ -140,24 +173,29 @@ function normalizeNote(source: BackendRecord, index = 0): LeadNote {
 
 function normalizeActivity(source: BackendRecord, index = 0): LeadActivity {
   return {
-    content: readString(source, ["content", "description", "message"], "Activity details are updating"),
-    createdAt: readString(source, ["createdAt", "timestamp", "date"]),
+    content: readString(source, ["details", "content", "description", "message", "subject"], "Activity details are updating"),
+    createdAt: readString(source, ["occurredAt", "createdAt", "timestamp", "date"]),
     id: readNumber(source, ["id", "activityId"]) ?? readString(source, ["id", "activityId"], String(index)),
-    type: readString(source, ["type", "activityType"], "OTHER")
+    type: readString(source, ["activityType", "type"], "OTHER")
   };
 }
 
 function normalizeTask(source: BackendRecord, index = 0): FollowUpTask {
   return {
+    description: readString(source, ["description", "content"]),
     dueAt: readString(source, ["dueAt", "dueDate", "scheduledAt"]),
     id: readNumber(source, ["id", "taskId"]) ?? readString(source, ["id", "taskId"], String(index)),
+    priority: readString(source, ["priority"], "MEDIUM"),
+    status: readString(source, ["status"], "PENDING"),
     title: readString(source, ["title", "content", "description"], "Follow-up task")
   };
 }
 
 function normalizeLeadDetail(source: BackendRecord): LeadDetail {
+  const lead = readNestedRecord(source, "lead") ?? source;
+
   return {
-    ...normalizeLead(source),
+    ...normalizeLead(lead),
     activities: readRecordArray(source, ["activities", "leadActivities"]).map(normalizeActivity),
     followUpTasks: readRecordArray(source, ["followUpTasks", "tasks"]).map(normalizeTask),
     notes: readRecordArray(source, ["notes", "leadNotes"]).map(normalizeNote)
@@ -168,12 +206,13 @@ function normalizeScore(source: BackendRecord): LeadScore {
   const reasons = readRecordArray(source, ["reasons", "signals"]).map((item) =>
     readString(item, ["text", "message", "reason"])
   );
+  const reason = readString(source, ["reason"]);
 
   return {
     priority: readString(source, ["priority"], "MEDIUM"),
-    reasons: reasons.filter(Boolean),
+    reasons: [...reasons, reason].filter(Boolean),
     score: readNumber(source, ["score", "leadScore"]),
-    suggestedAction: readString(source, ["suggestedAction", "nextAction", "recommendation"])
+    suggestedAction: readString(source, ["suggestedFollowUp", "suggestedAction", "nextAction", "recommendation"])
   };
 }
 
@@ -193,6 +232,10 @@ export function searchLeads(params: LeadSearchParams) {
     .then((response) => ({ ...response, content: response.content.map(normalizeLead) }));
 }
 
+export function createLead(request: LeadCreateRequest) {
+  return apiClient.post<BackendRecord>("/leads", request).then(normalizeLeadDetail);
+}
+
 export function getLead(leadId: number | string) {
   return apiClient
     .get<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}`)
@@ -201,8 +244,7 @@ export function getLead(leadId: number | string) {
 
 export function assignLead(leadId: number | string, assignedAgentId: number) {
   return apiClient
-    .patch<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/assign`, { assignedAgentId })
-    .then(normalizeLeadDetail);
+    .patch<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/assign`, { agentId: assignedAgentId });
 }
 
 export function updateLeadStatus(leadId: number | string, status: string) {
@@ -219,11 +261,19 @@ export function addLeadNote(leadId: number | string, content: string) {
 
 export function addLeadActivity(leadId: number | string, request: { content: string; type: LeadActivityType }) {
   return apiClient
-    .post<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/activities`, request)
+    .post<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/activities`, {
+      activityType: request.type,
+      details: request.content,
+      subject: request.content,
+      occurredAt: new Date().toISOString()
+    })
     .then(normalizeActivity);
 }
 
-export function createFollowUpTask(leadId: number | string, request: { dueAt?: string; title: string }) {
+export function createFollowUpTask(
+  leadId: number | string,
+  request: { assignedAgentId?: number; description?: string; dueAt?: string; priority?: string; title: string }
+) {
   return apiClient
     .post<BackendRecord>(`/leads/${encodeURIComponent(String(leadId))}/follow-up-tasks`, request)
     .then(normalizeTask);
@@ -231,6 +281,6 @@ export function createFollowUpTask(leadId: number | string, request: { dueAt?: s
 
 export function scoreLead(leadId: number | string) {
   return apiClient
-    .post<BackendRecord>(`/ai/leads/${encodeURIComponent(String(leadId))}/score`, { forceRefresh: false })
+    .post<BackendRecord>(`/ai/leads/${encodeURIComponent(String(leadId))}/score`, { language: "vi" })
     .then(normalizeScore);
 }

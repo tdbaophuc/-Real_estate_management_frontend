@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Rocket, Save, Send, Sparkles, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Save, UploadCloud, XCircle } from "lucide-react";
 import { z } from "zod";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { useAuth } from "../../shared/auth/useAuth";
@@ -12,19 +12,21 @@ import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
+import { StatusBadge } from "../../shared/ui/StatusBadge";
+import { formatCurrency } from "../../shared/lib/format";
 import type { RoleCode } from "../../shared/types/auth";
 import {
   createListing,
-  generateListingDescription,
+  getListing,
   runListingWorkflowAction,
   updateListing,
-  type ListingDescriptionSuggestion,
   type ListingCreateRequest,
   type ListingRecord,
   type ListingUpdateRequest,
   type ListingWorkflowAction
 } from "./listingApi";
-import { getStoredListing, saveListingWorkflowState } from "./listingWorkflowState";
+import { getListingPackages } from "../master-data/masterDataApi";
+import { getProperty, searchProperties } from "../properties/propertyApi";
 
 const optionalNumber = z.string().trim().refine((value) => !value || !Number.isNaN(Number(value)), "Must be a number");
 const requiredNumber = z.string().trim().min(1, "Required").refine((value) => !Number.isNaN(Number(value)), "Must be a number");
@@ -58,24 +60,18 @@ const visibilityOptions = [
   { label: "Unlisted", value: "UNLISTED" }
 ];
 
-const aiToneOptions = [
-  { label: "Professional", value: "PROFESSIONAL" },
-  { label: "Friendly", value: "FRIENDLY" },
-  { label: "Luxury", value: "LUXURY" },
-  { label: "Concise", value: "CONCISE" }
-];
-
-const aiLanguageOptions = [
-  { label: "Vietnamese", value: "vi" },
-  { label: "English", value: "en" }
-];
-
 const workflowActionLabels: Record<ListingWorkflowAction, string> = {
   approve: "Approve",
   publish: "Publish",
   reject: "Reject",
   submit: "Submit review",
   unpublish: "Unpublish"
+};
+
+type PropertySuggestion = {
+  id: number | string;
+  meta: string;
+  title: string;
 };
 
 function toNumber(value: string) {
@@ -131,7 +127,21 @@ function toCreateRequest(values: ListingFormValues): ListingCreateRequest {
 }
 
 function toUpdateRequest(values: ListingFormValues): ListingUpdateRequest {
-  return toCreateRequest(values);
+  const listingPackageId = toNumber(values.listingPackageId);
+
+  return {
+    askingPrice: Number(values.askingPrice),
+    currency: values.currency.trim().toUpperCase(),
+    description: values.description.trim(),
+    listingPackageId,
+    purpose: values.purpose,
+    seoDescription: values.seoDescription || undefined,
+    seoKeywords: values.seoKeywords || undefined,
+    seoTitle: values.seoTitle || undefined,
+    slug: values.slug.trim(),
+    title: values.title.trim(),
+    visibility: values.visibility
+  };
 }
 
 function hasAnyRole(roles: RoleCode[], allowedRoles: RoleCode[]) {
@@ -163,29 +173,20 @@ function getAvailableWorkflowActions(status: string, roles: RoleCode[]) {
   return actions;
 }
 
-function getWorkflowIcon(action: ListingWorkflowAction) {
-  if (action === "submit") {
-    return <Send size={16} />;
+function statusTone(status: string) {
+  if (status === "PUBLISHED" || status === "APPROVED") {
+    return "success";
   }
 
-  if (action === "approve") {
-    return <CheckCircle2 size={16} />;
+  if (status === "PENDING_REVIEW") {
+    return "warning";
   }
 
-  if (action === "reject") {
-    return <XCircle size={16} />;
+  if (status === "REJECTED") {
+    return "danger";
   }
 
-  return <Rocket size={16} />;
-}
-
-function FormSection({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className="form-section">
-      <h3>{title}</h3>
-      <div className="form-grid">{children}</div>
-    </section>
-  );
+  return "neutral";
 }
 
 function TextareaField({
@@ -204,6 +205,80 @@ function TextareaField({
   );
 }
 
+function PropertySearchPicker({
+  disabled,
+  error,
+  items,
+  loadError,
+  loading,
+  onQueryChange,
+  onSelect,
+  query
+}: {
+  disabled?: boolean;
+  error?: string;
+  items: PropertySuggestion[];
+  loadError?: string;
+  loading: boolean;
+  onQueryChange: (value: string) => void;
+  onSelect: (item: PropertySuggestion) => void;
+  query: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const showSuggestions = !disabled && open && (loading || Boolean(loadError) || items.length > 0 || Boolean(query.trim()));
+
+  return (
+    <div
+      className="field listing-property-picker"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <span>Property</span>
+      <input
+        className={error ? "input input-error" : "input"}
+        disabled={disabled}
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        onFocus={() => setOpen(true)}
+        placeholder="Type property name, code, or address"
+      />
+      {showSuggestions ? (
+        <div className="listing-property-suggestions">
+          {loading ? <p>Searching...</p> : null}
+          {!loading && loadError ? <p className="listing-property-search-error">{loadError}</p> : null}
+          {!loading && !loadError && items.length ? items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                onSelect(item);
+                setOpen(false);
+              }}
+            >
+              <strong>{item.title}</strong>
+              <small>{item.meta}</small>
+            </button>
+          )) : null}
+          {!loading && !loadError && query.trim() && items.length === 0 ? <p>No suggestions found</p> : null}
+        </div>
+      ) : null}
+      {error ? <small className="field-error">{error}</small> : null}
+    </div>
+  );
+}
+
+function ListingEditorCard({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="listing-editor-card">
+      <h3>{title}</h3>
+      <div className="form-grid">{children}</div>
+    </section>
+  );
+}
+
 export function ListingFormPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -211,25 +286,34 @@ export function ListingFormPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isEditMode = Boolean(id);
-  const [workflowListing, setWorkflowListing] = useState<ListingRecord | null>(
-    () =>
-      id
-        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
-        : null
-  );
+  const [workflowListing, setWorkflowListing] = useState<ListingRecord | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pendingWorkflowAction, setPendingWorkflowAction] = useState<ListingWorkflowAction | null>(null);
+  const [propertySearch, setPropertySearch] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+
+  const listingQuery = useQuery({
+    enabled: isEditMode,
+    queryFn: () => getListing(id ?? ""),
+    queryKey: ["listing", id],
+    retry: 1
+  });
+  const packagesQuery = useQuery({
+    queryFn: getListingPackages,
+    queryKey: ["master-data", "listing-packages"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const propertiesQuery = useQuery({
+    enabled: !isEditMode,
+    queryFn: () => searchProperties({ keyword: propertySearch, page: 0, size: 25, status: "AVAILABLE" }),
+    queryKey: ["listing-form-properties", propertySearch],
+    retry: 1
+  });
   const defaultValues = useMemo(
     () => toDefaultValues(workflowListing, searchParams.get("propertyId") ?? ""),
     [searchParams, workflowListing]
   );
-  const [formError, setFormError] = useState<string | null>(null);
-  const [pendingWorkflowAction, setPendingWorkflowAction] =
-    useState<ListingWorkflowAction | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [aiTone, setAiTone] = useState("PROFESSIONAL");
-  const [aiLanguage, setAiLanguage] = useState("vi");
-  const [aiIncludeSeo, setAiIncludeSeo] = useState(true);
-  const [aiExtraInstructions, setAiExtraInstructions] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState<ListingDescriptionSuggestion | null>(null);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -242,9 +326,20 @@ export function ListingFormPage() {
     defaultValues,
     resolver: zodResolver(listingFormSchema)
   });
+  const watchedValues = watch();
+  const selectedPropertyQuery = useQuery({
+    enabled: Boolean(watchedValues.propertyId),
+    queryFn: () => getProperty(watchedValues.propertyId),
+    queryKey: ["listing-form-property", watchedValues.propertyId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
   const saveMutation = useMutation({
     mutationFn: (values: ListingFormValues) =>
-      isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values))
+      isEditMode ? updateListing(id ?? "", toUpdateRequest(values)) : createListing(toCreateRequest(values)),
+    onSuccess: (saved) => {
+      persistWorkflowListing(saved);
+    }
   });
   const workflowMutation = useMutation({
     mutationFn: ({ action, reason }: { action: ListingWorkflowAction; reason?: string }) => {
@@ -260,49 +355,76 @@ export function ListingFormPage() {
       setRejectReason("");
     }
   });
-  const aiMutation = useMutation({
-    mutationFn: () => {
-      if (!workflowListing) {
-        throw new Error("Create or save the listing before requesting AI suggestions.");
-      }
-
-      return generateListingDescription({
-        extraInstructions: aiExtraInstructions || undefined,
-        includeSeo: aiIncludeSeo,
-        language: aiLanguage,
-        listingId: workflowListing.id,
-        tone: aiTone
-      });
-    },
-    onSuccess: setAiSuggestion
-  });
-  const title = watch("title");
   const availableWorkflowActions = workflowListing
     ? getAvailableWorkflowActions(workflowListing.status, user?.roles ?? [])
     : [];
-  const actionError = workflowMutation.error ?? aiMutation.error;
-  const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
+  const normalizedActionError = workflowMutation.error ? normalizeUnknownError(workflowMutation.error) : null;
+  const listingLoadError = listingQuery.error ? normalizeUnknownError(listingQuery.error) : null;
+  const propertyLoadError = propertiesQuery.error ? normalizeUnknownError(propertiesQuery.error).message : undefined;
+  const listingPackageOptions = useMemo(() => {
+    const options = [
+      { label: "No package", value: "" },
+      ...(packagesQuery.data ?? []).map((item) => ({
+        label: `${item.name}${item.price ? ` / ${item.price.toLocaleString("vi-VN")} ${item.currency ?? "VND"}` : ""}`,
+        value: String(item.id)
+      }))
+    ];
+
+    if (
+      workflowListing?.listingPackageId &&
+      !options.some((option) => option.value === String(workflowListing.listingPackageId))
+    ) {
+      options.push({
+        label: workflowListing.listingPackage?.name ?? `Package #${workflowListing.listingPackageId}`,
+        value: String(workflowListing.listingPackageId)
+      });
+    }
+
+    return options;
+  }, [packagesQuery.data, workflowListing?.listingPackage?.name, workflowListing?.listingPackageId]);
 
   useEffect(() => {
     reset(defaultValues);
   }, [defaultValues, reset]);
 
   useEffect(() => {
-    setWorkflowListing(
-      id
-        ? queryClient.getQueryData<ListingRecord>(["listing-workflow", id]) ?? getStoredListing(id)
-        : null
-    );
-  }, [id, queryClient]);
+    if (listingQuery.data) {
+      setWorkflowListing(listingQuery.data);
+    }
+  }, [listingQuery.data]);
+
+  useEffect(() => {
+    if (workflowListing?.property) {
+      setPropertySearch(
+        [workflowListing.property.code, workflowListing.property.name, workflowListing.property.address]
+          .filter(Boolean)
+          .join(" / ")
+      );
+    }
+  }, [workflowListing?.property]);
+
+  useEffect(() => {
+    if (!workflowListing?.property && selectedPropertyQuery.data && !propertySearch) {
+      setPropertySearch(
+        [
+          selectedPropertyQuery.data.code,
+          selectedPropertyQuery.data.name,
+          selectedPropertyQuery.data.address.fullAddress
+        ]
+          .filter(Boolean)
+          .join(" / ")
+      );
+    }
+  }, [propertySearch, selectedPropertyQuery.data, workflowListing?.property]);
 
   function persistWorkflowListing(saved: ListingRecord) {
     setWorkflowListing(saved);
-    queryClient.setQueryData(["listing-workflow", saved.id], saved);
-    saveListingWorkflowState(saved);
+    queryClient.setQueryData(["listing", String(saved.id)], saved);
+    void queryClient.invalidateQueries({ queryKey: ["listings"] });
   }
 
   function applyGeneratedSlug() {
-    setValue("slug", slugify(title), { shouldDirty: true, shouldValidate: true });
+    setValue("slug", slugify(watchedValues.title), { shouldDirty: true, shouldValidate: true });
   }
 
   const onSubmit = handleSubmit(async (values) => {
@@ -310,7 +432,6 @@ export function ListingFormPage() {
 
     try {
       const saved = await saveMutation.mutateAsync(values);
-      persistWorkflowListing(saved);
       navigate(`/listings/${saved.id}/edit`, { replace: true });
     } catch (error) {
       const normalizedError = normalizeUnknownError(error);
@@ -338,251 +459,164 @@ export function ListingFormPage() {
     });
   }
 
-  function applyAiSuggestion(fields: Array<keyof ListingDescriptionSuggestion>) {
-    if (!aiSuggestion) {
-      return;
-    }
-
-    fields.forEach((field) => {
-      const value = aiSuggestion[field];
-
-      if (!value) {
-        return;
-      }
-
-      if (field === "title") {
-        setValue("title", value, { shouldDirty: true, shouldValidate: true });
-      }
-
-      if (field === "description" || field === "shortDescription") {
-        setValue("description", value, { shouldDirty: true, shouldValidate: true });
-      }
-
-      if (field === "seoTitle") {
-        setValue("seoTitle", value, { shouldDirty: true, shouldValidate: true });
-      }
-
-      if (field === "seoDescription") {
-        setValue("seoDescription", value, { shouldDirty: true, shouldValidate: true });
-      }
-
-      if (field === "seoKeywords") {
-        setValue("seoKeywords", value, { shouldDirty: true, shouldValidate: true });
-      }
-    });
-  }
-
   if (isEditMode && !workflowListing) {
     return (
       <section className="content-section">
-        <EmptyState
-          title="Listing edit state not available"
-          description="The backend does not expose an internal listing detail endpoint yet. Continue from a listing created or updated in this browser session."
-          action={
-            <Button asChild>
-              <Link to="/listings/new">Create listing</Link>
-            </Button>
-          }
-        />
+        {listingQuery.isLoading ? (
+          <EmptyState title="Loading listing" description="Fetching internal listing detail." />
+        ) : (
+          <EmptyState
+            title="Listing could not be loaded"
+            description={listingLoadError?.message ?? "The internal listing detail endpoint did not return this listing."}
+            action={<Button onClick={() => listingQuery.refetch()}>Retry</Button>}
+          />
+        )}
       </section>
     );
   }
 
+  const canPublish = availableWorkflowActions.includes("publish");
+
   return (
-    <section>
+    <section className="listing-form-page">
       <Button asChild variant="ghost" size="sm">
         <Link to="/listings">
           <ArrowLeft size={16} />
           Back to listings
         </Link>
       </Button>
-      <div className="section-header">
+      <div className="listing-form-header">
         <div>
           <p className="eyebrow">Listings</p>
-          <h2>{isEditMode ? "Edit listing draft" : "Create listing"}</h2>
+          <h2>{isEditMode ? "Edit Listing" : "Create New Listing"}</h2>
+          {workflowListing ? <StatusBadge tone={statusTone(workflowListing.status)}>{workflowListing.status}</StatusBadge> : null}
         </div>
-      </div>
-      {workflowListing ? (
-        <section className="content-section listing-workflow-summary">
-          <div>
-            <span>Current workflow response</span>
-            <strong>{workflowListing.code}</strong>
-          </div>
-          <div>
-            <span>Status</span>
-            <strong>{workflowListing.status}</strong>
-          </div>
-          <div>
-            <span>Listing id</span>
-            <strong>{workflowListing.id}</strong>
-          </div>
-        </section>
-      ) : null}
-      {workflowListing ? (
-        <section className="content-section listing-action-panel">
-          <div>
-            <p className="eyebrow">Workflow</p>
-            <h3>Listing actions</h3>
-          </div>
-          <div className="listing-action-buttons">
-            {availableWorkflowActions.length ? (
-              availableWorkflowActions.map((action) => (
-                <Button
-                  key={action}
-                  type="button"
-                  variant={action === "reject" ? "danger" : "secondary"}
-                  disabled={workflowMutation.isPending}
-                  onClick={() => setPendingWorkflowAction(action)}
-                >
-                  {getWorkflowIcon(action)}
-                  {workflowActionLabels[action]}
-                </Button>
-              ))
-            ) : (
-              <p className="muted">No workflow action is available for your role and this status.</p>
-            )}
-          </div>
-        </section>
-      ) : null}
-      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
-      <form className="property-form" onSubmit={onSubmit}>
-        <FormSection title="Listing source">
-          <Input label="Property id" error={errors.propertyId?.message} {...register("propertyId")} />
-          <Input label="Listing package id" error={errors.listingPackageId?.message} {...register("listingPackageId")} />
-          <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
-          <Select label="Visibility" options={visibilityOptions} error={errors.visibility?.message} {...register("visibility")} />
-        </FormSection>
-        <FormSection title="Content">
-          <Input label="Code" error={errors.code?.message} {...register("code")} />
-          <Input label="Title" error={errors.title?.message} {...register("title")} />
-          <Input label="Slug" error={errors.slug?.message} {...register("slug")} />
-          <div className="field field-button-align">
-            <Button type="button" variant="secondary" onClick={applyGeneratedSlug} disabled={!title}>
-              Generate slug
-            </Button>
-          </div>
-          <TextareaField label="Description" rows={5} error={errors.description?.message} {...register("description")} />
-        </FormSection>
-        <FormSection title="Pricing">
-          <Input label="Asking price" error={errors.askingPrice?.message} {...register("askingPrice")} />
-          <Input
-            label="Currency"
-            error={errors.currency?.message}
-            onInput={(event) => {
-              event.currentTarget.value = event.currentTarget.value.toUpperCase();
-            }}
-            {...register("currency")}
-          />
-        </FormSection>
-        <FormSection title="SEO">
-          <Input label="SEO title" error={errors.seoTitle?.message} {...register("seoTitle")} />
-          <Input label="SEO keywords" error={errors.seoKeywords?.message} {...register("seoKeywords")} />
-          <TextareaField label="SEO description" rows={3} error={errors.seoDescription?.message} {...register("seoDescription")} />
-        </FormSection>
-        <section className="form-section ai-suggestion-panel">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">AI assist</p>
-              <h3>Description and SEO suggestions</h3>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={!workflowListing || aiMutation.isPending}
-              onClick={() => aiMutation.mutate()}
-            >
-              <Sparkles size={16} />
-              Generate suggestions
-            </Button>
-          </div>
-          <div className="form-grid">
-            <Select
-              label="Tone"
-              options={aiToneOptions}
-              value={aiTone}
-              onChange={(event) => setAiTone(event.target.value)}
-            />
-            <Select
-              label="Language"
-              options={aiLanguageOptions}
-              value={aiLanguage}
-              onChange={(event) => setAiLanguage(event.target.value)}
-            />
-            <label className="toggle-field">
-              <input
-                type="checkbox"
-                checked={aiIncludeSeo}
-                onChange={(event) => setAiIncludeSeo(event.target.checked)}
-              />
-              <span>Include SEO</span>
-            </label>
-            <TextareaField
-              label="Extra instructions"
-              rows={3}
-              value={aiExtraInstructions}
-              onChange={(event) => setAiExtraInstructions(event.target.value)}
-              placeholder="Emphasize location, amenities, or buyer profile"
-            />
-          </div>
-          {!workflowListing ? (
-            <p className="muted">Create or save the listing before requesting AI suggestions.</p>
-          ) : null}
-          {aiSuggestion ? (
-            <div className="ai-suggestion-results">
-              {aiSuggestion.title ? (
-                <article>
-                  <span>Title</span>
-                  <p>{aiSuggestion.title}</p>
-                  <Button type="button" size="sm" variant="secondary" onClick={() => applyAiSuggestion(["title"])}>
-                    Apply title
-                  </Button>
-                </article>
-              ) : null}
-              {aiSuggestion.description || aiSuggestion.shortDescription ? (
-                <article>
-                  <span>Description</span>
-                  <p>{aiSuggestion.description || aiSuggestion.shortDescription}</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => applyAiSuggestion([aiSuggestion.description ? "description" : "shortDescription"])}
-                  >
-                    Apply description
-                  </Button>
-                </article>
-              ) : null}
-              {aiSuggestion.seoTitle || aiSuggestion.seoDescription || aiSuggestion.seoKeywords ? (
-                <article>
-                  <span>SEO</span>
-                  <p>{[aiSuggestion.seoTitle, aiSuggestion.seoDescription, aiSuggestion.seoKeywords].filter(Boolean).join(" / ")}</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => applyAiSuggestion(["seoTitle", "seoDescription", "seoKeywords"])}
-                  >
-                    Apply SEO
-                  </Button>
-                </article>
-              ) : null}
-              {aiSuggestion.socialCaption ? (
-                <article>
-                  <span>Social caption</span>
-                  <p>{aiSuggestion.socialCaption}</p>
-                </article>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-        {formError ? <p className="form-alert">{formError}</p> : null}
-        <div className="form-actions">
-          <Button type="submit" disabled={isSubmitting || saveMutation.isPending}>
+        <div className="listing-form-top-actions">
+          <Button type="submit" form="listing-editor-form" variant="secondary" disabled={isSubmitting || saveMutation.isPending}>
             <Save size={16} />
-            {isEditMode ? "Save listing" : "Create listing"}
+            Save Draft
+          </Button>
+          <Button
+            type="button"
+            disabled={!workflowListing || !canPublish || workflowMutation.isPending}
+            onClick={() => setPendingWorkflowAction("publish")}
+          >
+            <UploadCloud size={16} />
+            Publish Listing
           </Button>
         </div>
-      </form>
+      </div>
+      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
+      <div className="listing-editor-layout">
+        <form id="listing-editor-form" className="listing-editor-main" onSubmit={onSubmit}>
+          <ListingEditorCard title="Target Asset">
+            <input type="hidden" {...register("propertyId")} />
+            <PropertySearchPicker
+              disabled={isEditMode}
+              error={errors.propertyId?.message}
+              query={
+                isEditMode
+                  ? propertySearch || workflowListing?.property?.name || (watchedValues.propertyId ? `#${watchedValues.propertyId}` : "")
+                  : propertySearch
+              }
+              onQueryChange={(value) => {
+                setPropertySearch(value);
+                setValue("propertyId", "", { shouldDirty: true, shouldValidate: true });
+              }}
+              loading={propertiesQuery.isFetching}
+              loadError={propertyLoadError}
+              items={(propertiesQuery.data?.content ?? []).map((property) => ({
+                id: property.id,
+                meta: [property.code, property.address.fullAddress].filter(Boolean).join(" / "),
+                title: property.name
+              }))}
+              onSelect={(item) => {
+                setValue("propertyId", String(item.id), { shouldDirty: true, shouldValidate: true });
+                setPropertySearch([item.title, item.meta].filter(Boolean).join(" / "));
+              }}
+            />
+            <Input label="Listing Code" error={errors.code?.message} readOnly={isEditMode} {...register("code")} />
+            <Select
+              label="Listing Package"
+              options={listingPackageOptions}
+              error={errors.listingPackageId?.message}
+              disabled={packagesQuery.isLoading}
+              {...register("listingPackageId")}
+            />
+            <Select label="Visibility" options={visibilityOptions} error={errors.visibility?.message} {...register("visibility")} />
+          </ListingEditorCard>
+          <ListingEditorCard title="Listing Content">
+            <Input label="Title" error={errors.title?.message} {...register("title")} />
+            <Input label="Slug" error={errors.slug?.message} {...register("slug")} />
+            <div className="field field-button-align">
+              <Button type="button" variant="secondary" onClick={applyGeneratedSlug} disabled={!watchedValues.title}>
+                Generate slug
+              </Button>
+            </div>
+            <TextareaField label="Description" rows={7} error={errors.description?.message} {...register("description")} />
+          </ListingEditorCard>
+          <ListingEditorCard title="Pricing & Terms">
+            <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
+            <Input label="Asking Price" error={errors.askingPrice?.message} {...register("askingPrice")} />
+            <Input
+              label="Currency"
+              error={errors.currency?.message}
+              onInput={(event) => {
+                event.currentTarget.value = event.currentTarget.value.toUpperCase();
+              }}
+              {...register("currency")}
+            />
+          </ListingEditorCard>
+          <ListingEditorCard title="SEO">
+            <Input label="SEO Title" error={errors.seoTitle?.message} {...register("seoTitle")} />
+            <Input label="SEO Keywords" error={errors.seoKeywords?.message} {...register("seoKeywords")} />
+            <TextareaField label="SEO Description" rows={3} error={errors.seoDescription?.message} {...register("seoDescription")} />
+          </ListingEditorCard>
+          {workflowListing && availableWorkflowActions.length ? (
+            <section className="listing-editor-card">
+              <h3>Workflow Actions</h3>
+              <div className="listing-action-buttons">
+                {availableWorkflowActions.map((action) => (
+                  <Button
+                    key={action}
+                    type="button"
+                    variant={action === "reject" ? "danger" : "secondary"}
+                    disabled={workflowMutation.isPending}
+                    onClick={() => setPendingWorkflowAction(action)}
+                  >
+                    {action === "reject" ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
+                    {workflowActionLabels[action]}
+                  </Button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {formError ? <p className="form-alert">{formError}</p> : null}
+        </form>
+        <aside className="listing-preview-panel">
+          <div className="listing-preview-media">
+            <span>{watchedValues.purpose}</span>
+          </div>
+          <div className="listing-preview-body">
+            <p className="eyebrow">Live Preview</p>
+            <h3>{watchedValues.title || "Listing title"}</h3>
+            <p>
+              {workflowListing?.property?.address ||
+                workflowListing?.property?.name ||
+                selectedPropertyQuery.data?.address.fullAddress ||
+                selectedPropertyQuery.data?.name ||
+                propertySearch ||
+                "-"}
+            </p>
+            <strong>
+              {watchedValues.askingPrice && !Number.isNaN(Number(watchedValues.askingPrice))
+                ? formatCurrency(Number(watchedValues.askingPrice), watchedValues.currency || "VND")
+                : "-"}
+            </strong>
+            <p>{watchedValues.description || "Description preview updates as you type."}</p>
+          </div>
+        </aside>
+      </div>
       <Dialog
         open={Boolean(pendingWorkflowAction)}
         onClose={() => setPendingWorkflowAction(null)}

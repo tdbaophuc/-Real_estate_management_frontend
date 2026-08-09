@@ -6,6 +6,7 @@ import {
   type ReactElement,
   type ReactNode
 } from "react";
+import { useText } from "../i18n/useText";
 import { cn } from "../lib/cn";
 
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -17,6 +18,24 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: ButtonSize;
   variant?: ButtonVariant;
 };
+
+function translateNode(node: ReactNode, tx: (text: string) => string): ReactNode {
+  if (typeof node === "string") {
+    return tx(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => translateNode(child, tx));
+  }
+
+  if (isValidElement(node)) {
+    return cloneElement(node as ReactElement<{ children?: ReactNode }>, {
+      children: translateNode((node.props as { children?: ReactNode }).children, tx)
+    });
+  }
+
+  return node;
+}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -31,6 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const tx = useText();
     const buttonClassName = cn(
       "btn",
       `btn-${variant}`,
@@ -39,14 +59,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     );
 
     if (asChild && isValidElement(children)) {
-      return cloneElement(children as ReactElement, {
+      return cloneElement(children as ReactElement<{ children?: ReactNode; className?: string }>, {
+        children: translateNode((children.props as { children?: ReactNode }).children, tx),
         className: cn((children.props as { className?: string }).className, buttonClassName)
       });
     }
 
     return (
       <button ref={ref} type={type} className={buttonClassName} {...props}>
-        {children}
+        {translateNode(children, tx)}
       </button>
     );
   }

@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Bath, BedDouble, Heart, MapPin, Ruler } from "lucide-react";
+import { ArrowRight, Bath, BedDouble, Heart, MapPin, Ruler, Search } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { Pagination } from "../../shared/ui/Pagination";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { formatCurrency } from "../../shared/lib/format";
-import { getFavoriteListings, type PublicListing } from "./publicListingApi";
+import { useText } from "../../shared/i18n/useText";
+import { getFavoriteListings, getPublicListingImageUrl, type PublicListing } from "./publicListingApi";
 
 const pageSize = 10;
 
@@ -24,13 +25,22 @@ function statusTone(status: string) {
   return "neutral";
 }
 
-function formatArea(area: number | null) {
-  return area ? `${area.toLocaleString("vi-VN")} m2` : "Area updating";
+function formatArea(area: number | null, tx: (text: string) => string) {
+  return area ? `${area.toLocaleString("vi-VN")} m2` : tx("Area updating");
 }
 
 function FavoriteListingRow({ listing }: { listing: PublicListing }) {
+  const tx = useText();
+  const imageUrl = getPublicListingImageUrl(listing);
+
   return (
     <article className="favorite-listing-row">
+      <div
+        className="favorite-listing-image"
+        style={imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined}
+      >
+        {!imageUrl ? <Heart size={18} /> : null}
+      </div>
       <div>
         <StatusBadge tone={statusTone(listing.status)}>{listing.status}</StatusBadge>
         <h3>{listing.title}</h3>
@@ -41,7 +51,7 @@ function FavoriteListingRow({ listing }: { listing: PublicListing }) {
         <div className="listing-meta">
           <span>
             <Ruler size={15} />
-            {formatArea(listing.area)}
+            {formatArea(listing.area, tx)}
           </span>
           <span>
             <BedDouble size={15} />
@@ -55,10 +65,13 @@ function FavoriteListingRow({ listing }: { listing: PublicListing }) {
       </div>
       <div className="favorite-listing-side">
         <strong>
-          {listing.price ? formatCurrency(listing.price, listing.currency) : "Price updating"}
+          {listing.price ? formatCurrency(listing.price, listing.currency) : tx("Price updating")}
         </strong>
         <Button asChild variant="secondary" size="sm">
-          <Link to={`/listing/${listing.slug}`}>View detail</Link>
+          <Link to={`/listing/${listing.slug}`}>
+            {tx("View detail")}
+            <ArrowRight size={15} />
+          </Link>
         </Button>
       </div>
     </article>
@@ -66,6 +79,7 @@ function FavoriteListingRow({ listing }: { listing: PublicListing }) {
 }
 
 export function FavoriteListingsPage() {
+  const tx = useText();
   const [page, setPage] = useState(0);
   const favoritesQuery = useQuery({
     queryFn: () => getFavoriteListings({ page, size: pageSize }),
@@ -77,11 +91,22 @@ export function FavoriteListingsPage() {
     : null;
 
   return (
-    <section>
-      <div className="section-header">
+    <section className="favorite-shortlist-page">
+      <div className="favorite-shortlist-header">
         <div>
-          <p className="eyebrow">Favorites</p>
-          <h2>Saved listings</h2>
+          <p className="eyebrow">{tx("Saved shortlist")}</p>
+          <h2>{tx("Homes you are reviewing")}</h2>
+          <p className="muted">
+            {tx("Keep your best options in one focused shortlist before requesting a viewing.")}
+          </p>
+        </div>
+        <div className="favorite-shortlist-actions">
+          <Button asChild>
+            <Link to="/search">
+              <Search size={16} />
+              {tx("Browse listings")}
+            </Link>
+          </Button>
         </div>
       </div>
       {favoritesQuery.isLoading ? (
@@ -94,20 +119,20 @@ export function FavoriteListingsPage() {
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Favorites could not be loaded"
+            title={tx("Favorites could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => favoritesQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => favoritesQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
       {favoritesQuery.data && favoritesQuery.data.content.length === 0 ? (
         <div className="content-section">
           <EmptyState
-            title="No saved listings yet"
-            description="Favorite published listings from the public detail page."
+            title={tx("No saved listings yet")}
+            description={tx("Start by saving listings that match your budget and preferred locations.")}
             action={
               <Button asChild>
-                <Link to="/">Browse listings</Link>
+                  <Link to="/search">{tx("Browse listings")}</Link>
               </Button>
             }
           />

@@ -20,6 +20,7 @@ export type CustomerRecord = {
   requirements: CustomerRequirement[];
   source: CustomerSource | string;
   status: CustomerStatus | string;
+  tags: CustomerTag[];
   userId: number | null;
 };
 
@@ -27,18 +28,23 @@ export type CustomerNote = {
   content: string;
   createdAt: string;
   id: number | string;
+  pinned: boolean;
 };
 
 export type CustomerRequirement = {
   currency: string;
+  districtName: string;
   id: number | string;
   location: string;
   maxArea: number | null;
   maxPrice: number | null;
   minArea: number | null;
   minPrice: number | null;
+  propertyTypeName: string;
+  provinceName: string;
   purpose: CustomerPurpose | null;
   summary: string;
+  wardName: string;
 };
 
 export type CustomerTimelineItem = {
@@ -47,6 +53,11 @@ export type CustomerTimelineItem = {
   timestamp: string;
   title: string;
   type: string;
+};
+
+export type CustomerTag = {
+  id: number | string;
+  name: string;
 };
 
 export type CustomerUpsertRequest = {
@@ -58,7 +69,7 @@ export type CustomerUpsertRequest = {
   phone?: string;
   preferredContactMethod?: string;
   priority: CustomerPriority;
-  source: CustomerSource;
+  source: CustomerSource | string;
   status: CustomerStatus;
   userId?: number;
 };
@@ -73,16 +84,18 @@ export type CustomerSearchParams = {
 };
 
 export type CustomerRecommendationRequest = {
-  currency?: string;
-  limit: number;
-  maxPrice?: number;
-  purpose?: CustomerPurpose | "";
+  candidateLimit?: number;
+  language?: string;
+  maxResults: number;
+  naturalLanguageNeed?: string;
 };
 
 export type CustomerRecommendation = {
   id: number | string;
   price: number | null;
+  reason: string;
   score: number | null;
+  suggestedAction: string;
   title: string;
   url: string;
 };
@@ -131,6 +144,18 @@ function readNestedRecord(source: BackendRecord, key: string) {
     : null;
 }
 
+function readFirstNestedRecord(source: BackendRecord, keys: string[]) {
+  for (const key of keys) {
+    const record = readNestedRecord(source, key);
+
+    if (record) {
+      return record;
+    }
+  }
+
+  return null;
+}
+
 function readRecordArray(source: BackendRecord, keys: string[]) {
   for (const key of keys) {
     const value = source[key];
@@ -150,42 +175,55 @@ function readPurpose(value: string): CustomerPurpose | null {
 function normalizeRequirement(source: BackendRecord, index = 0): CustomerRequirement {
   const id = readNumber(source, ["id", "requirementId"]) ?? readString(source, ["id", "requirementId"], String(index));
   const purpose = readPurpose(readString(source, ["purpose"]));
-  const location = readString(source, ["location", "preferredLocation", "area"]);
+  const provinceName = readString(source, ["provinceName", "province"]);
+  const districtName = readString(source, ["districtName", "district"]);
+  const wardName = readString(source, ["wardName", "ward"]);
+  const location =
+    readString(source, ["location", "preferredLocation", "area"]) ||
+    [wardName, districtName, provinceName].filter(Boolean).join(", ");
+  const propertyTypeName = readString(source, ["propertyTypeName", "propertyType", "assetClass"]);
 
   return {
     currency: readString(source, ["currency"], "VND"),
+    districtName,
     id,
     location,
     maxArea: readNumber(source, ["maxArea", "areaMax"]),
-    maxPrice: readNumber(source, ["maxPrice", "priceMax"]),
+    maxPrice: readNumber(source, ["maxPrice", "priceMax", "maxBudget"]),
     minArea: readNumber(source, ["minArea", "areaMin"]),
-    minPrice: readNumber(source, ["minPrice", "priceMin"]),
+    minPrice: readNumber(source, ["minPrice", "priceMin", "minBudget"]),
+    propertyTypeName,
+    provinceName,
     purpose,
     summary:
       readString(source, ["summary", "description", "notes"]) ||
-      [purpose, location].filter(Boolean).join(" / ") ||
-      "Requirement details are updating"
+      [propertyTypeName || purpose, location].filter(Boolean).join(" / ") ||
+      "Requirement details are updating",
+    wardName
   };
 }
 
 function normalizeCustomer(source: BackendRecord): CustomerRecord {
-  const id = readNumber(source, ["id", "customerId"]) ?? readString(source, ["id", "customerId"]);
+  const detailCustomer = readFirstNestedRecord(source, ["customer", "profile", "customerProfile"]);
+  const customerSource = detailCustomer ?? source;
+  const id = readNumber(customerSource, ["id", "customerId"]) ?? readString(customerSource, ["id", "customerId"]);
 
   return {
-    assignedAgentId: readNumber(source, ["assignedAgentId"]),
-    code: readString(source, ["code"], String(id || "CUSTOMER")),
-    email: readString(source, ["email"]),
-    fullName: readString(source, ["fullName", "name"], "Unnamed customer"),
-    id: id || readString(source, ["code", "email", "phone"]),
+    assignedAgentId: readNumber(customerSource, ["assignedAgentId"]),
+    code: readString(customerSource, ["code"], String(id || "CUSTOMER")),
+    email: readString(customerSource, ["email"]),
+    fullName: readString(customerSource, ["fullName", "name"], "Unnamed customer"),
+    id: id || readString(customerSource, ["code", "email", "phone"]),
     noteItems: readRecordArray(source, ["noteItems", "customerNotes", "notesList", "notes"]).map(normalizeNote),
-    notes: readString(source, ["notes", "note"]),
-    phone: readString(source, ["phone", "phoneNumber"]),
-    preferredContactMethod: readString(source, ["preferredContactMethod"], "PHONE"),
-    priority: readString(source, ["priority"], "MEDIUM"),
+    notes: readString(customerSource, ["notes", "note"]),
+    phone: readString(customerSource, ["phone", "phoneNumber"]),
+    preferredContactMethod: readString(customerSource, ["preferredContactMethod"], "PHONE"),
+    priority: readString(customerSource, ["priority"], "MEDIUM"),
     requirements: readRecordArray(source, ["requirements", "customerRequirements"]).map(normalizeRequirement),
-    source: readString(source, ["source"], "MANUAL"),
-    status: readString(source, ["status"], "ACTIVE"),
-    userId: readNumber(source, ["userId"])
+    source: readString(customerSource, ["source"], "MANUAL"),
+    status: readString(customerSource, ["status"], "ACTIVE"),
+    tags: readRecordArray(source, ["tags", "customerTags"]).map(normalizeTag),
+    userId: readNumber(customerSource, ["userId"])
   };
 }
 
@@ -193,15 +231,23 @@ function normalizeNote(source: BackendRecord, index = 0): CustomerNote {
   return {
     content: readString(source, ["content", "note", "notes", "message"], "Note details are updating"),
     createdAt: readString(source, ["createdAt", "timestamp", "date"]),
-    id: readNumber(source, ["id", "noteId"]) ?? readString(source, ["id", "noteId"], String(index))
+    id: readNumber(source, ["id", "noteId"]) ?? readString(source, ["id", "noteId"], String(index)),
+    pinned: Boolean(source.pinned)
+  };
+}
+
+function normalizeTag(source: BackendRecord, index = 0): CustomerTag {
+  return {
+    id: readNumber(source, ["id", "tagId"]) ?? readString(source, ["id", "tagId"], String(index)),
+    name: readString(source, ["name", "tag", "label"], "Tag")
   };
 }
 
 function normalizeTimelineItem(source: BackendRecord, index = 0): CustomerTimelineItem {
   return {
     description: readString(source, ["description", "message", "content"], "Timeline details are updating"),
-    id: readNumber(source, ["id", "timelineId"]) ?? readString(source, ["id", "timelineId"], String(index)),
-    timestamp: readString(source, ["timestamp", "createdAt", "date"]),
+    id: readNumber(source, ["id", "timelineId", "referenceId"]) ?? readString(source, ["id", "timelineId", "referenceId"], String(index)),
+    timestamp: readString(source, ["timestamp", "createdAt", "occurredAt", "date"]),
     title: readString(source, ["title", "event", "type"], "Activity"),
     type: readString(source, ["type", "eventType"], "ACTIVITY")
   };
@@ -215,6 +261,8 @@ function normalizeRecommendation(source: BackendRecord, index = 0): CustomerReco
     id,
     price: readNumber(listing, ["askingPrice", "price"]),
     score: readNumber(source, ["score", "matchScore"]),
+    reason: readString(source, ["reason", "matchReason"]),
+    suggestedAction: readString(source, ["suggestedAction", "nextAction"]),
     title: readString(listing, ["title", "name"], "Recommended listing"),
     url: readString(listing, ["slug"]) ? `/listing/${readString(listing, ["slug"])}` : ""
   };
@@ -226,9 +274,9 @@ function normalizeSummary(source: BackendRecord): CustomerSummary {
   const tags = readRecordArray(content, ["tags"]).map((item) => readString(item, ["label", "name", "text"]));
 
   return {
-    nextAction: readString(content, ["nextAction", "recommendedAction"]),
+    nextAction: readString(content, ["nextBestAction", "nextAction", "recommendedAction"]),
     risks: risks.filter(Boolean),
-    summary: readString(content, ["summary", "content", "text"], "AI summary is not available yet."),
+    summary: readString(content, ["needsSummary", "summary", "content", "text"], "AI summary is not available yet."),
     tags: tags.filter(Boolean)
   };
 }
@@ -266,9 +314,37 @@ export function updateCustomer(customerId: number | string, request: CustomerUps
     .then(normalizeCustomer);
 }
 
+export function deleteCustomer(customerId: number | string) {
+  return apiClient.delete<void>(`/customers/${encodeURIComponent(String(customerId))}`);
+}
+
 export function addCustomerNote(customerId: number | string, content: string) {
   return apiClient
     .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/notes`, { content })
+    .then(normalizeNote);
+}
+
+export function updateCustomerNote(customerId: number | string, noteId: number | string, content: string, pinned?: boolean) {
+  return apiClient
+    .put<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}`,
+      { content, pinned }
+    )
+    .then(normalizeNote);
+}
+
+export function deleteCustomerNote(customerId: number | string, noteId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}`
+  );
+}
+
+export function pinCustomerNote(customerId: number | string, noteId: number | string, pinned: boolean) {
+  return apiClient
+    .patch<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/notes/${encodeURIComponent(String(noteId))}/pin`,
+      { pinned }
+    )
     .then(normalizeNote);
 }
 
@@ -276,6 +352,43 @@ export function addCustomerRequirement(customerId: number | string, request: Par
   return apiClient
     .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/requirements`, request)
     .then(normalizeRequirement);
+}
+
+export function updateCustomerRequirement(
+  customerId: number | string,
+  requirementId: number | string,
+  request: Partial<CustomerRequirement>
+) {
+  return apiClient
+    .put<BackendRecord>(
+      `/customers/${encodeURIComponent(String(customerId))}/requirements/${encodeURIComponent(String(requirementId))}`,
+      request
+    )
+    .then(normalizeRequirement);
+}
+
+export function deleteCustomerRequirement(customerId: number | string, requirementId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/requirements/${encodeURIComponent(String(requirementId))}`
+  );
+}
+
+export function getCustomerTags(customerId: number | string) {
+  return apiClient
+    .get<BackendRecord[]>(`/customers/${encodeURIComponent(String(customerId))}/tags`)
+    .then((items) => items.map(normalizeTag));
+}
+
+export function addCustomerTag(customerId: number | string, name: string) {
+  return apiClient
+    .post<BackendRecord>(`/customers/${encodeURIComponent(String(customerId))}/tags`, { name })
+    .then(normalizeTag);
+}
+
+export function deleteCustomerTag(customerId: number | string, tagId: number | string) {
+  return apiClient.delete<void>(
+    `/customers/${encodeURIComponent(String(customerId))}/tags/${encodeURIComponent(String(tagId))}`
+  );
 }
 
 export function getCustomerTimeline(customerId: number | string) {

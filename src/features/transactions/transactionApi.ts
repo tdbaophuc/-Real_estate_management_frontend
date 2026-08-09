@@ -9,6 +9,7 @@ export type TransactionStatus =
   | "PAYMENT_IN_PROGRESS"
   | "PENDING"
   | "REFUNDED";
+export type TransactionType = "LEASE" | "SALE";
 
 export type MoneyRecord = {
   amount: number | null;
@@ -43,35 +44,57 @@ export type ReceiptRecord = {
 };
 
 export type TransactionRecord = {
+  agentId: number | null;
+  agentName: string;
+  agreedValue: number | null;
   code: string;
+  confirmedAmount: number | null;
   contractId: number | null;
+  contractCode: string;
   currency: string;
   customerId: number | null;
+  customerName: string;
   deposits: MoneyRecord[];
+  expectedCompletionDate: string;
   id: number | string;
   invoices: InvoiceRecord[];
   payments: PaymentRecord[];
   paymentSchedules: PaymentScheduleRecord[];
+  notes: string;
   propertyId: number | null;
+  propertyName: string;
+  remainingAmount: number | null;
   receipts: ReceiptRecord[];
   status: TransactionStatus | string;
   title: string;
   totalAmount: number | null;
+  transactionDate: string;
+  transactionType: TransactionType | string;
 };
 
 export type TransactionSearchParams = {
+  agentId?: string;
+  customerId?: string;
   keyword?: string;
   page: number;
+  propertyId?: string;
   size: number;
   status?: string;
+  transactionType?: string;
 };
 
 export type TransactionCreateRequest = {
+  agentId?: number;
+  agreedValue?: number;
   code: string;
   contractId?: number;
   currency: string;
   customerId?: number;
+  expectedCompletionDate?: string;
+  notes?: string;
   propertyId?: number;
+  transactionDate?: string;
+  transactionType?: TransactionType;
   title: string;
   totalAmount?: number;
 };
@@ -198,29 +221,45 @@ function normalizeTransaction(source: BackendRecord): TransactionRecord {
   const id = readNumber(source, ["id", "transactionId"]) ?? readString(source, ["id", "transactionId"]);
 
   return {
+    agentId: readNumber(source, ["agentId"]),
+    agentName: readString(source, ["agentName"]),
+    agreedValue: readNumber(source, ["agreedValue", "totalAmount", "amount", "value"]),
     code: readString(source, ["code"], String(id || "TRANSACTION")),
+    confirmedAmount: readNumber(source, ["confirmedAmount", "paidAmount"]),
     contractId: readNumber(source, ["contractId"]),
+    contractCode: readString(source, ["contractCode"]),
     currency: readString(source, ["currency"], "VND"),
     customerId: readNumber(source, ["customerId"]),
+    customerName: readString(source, ["customerName"]),
     deposits: readRecordArray(source, ["deposits"]).map(normalizeMoney),
+    expectedCompletionDate: readString(source, ["expectedCompletionDate"]),
     id: id || readString(source, ["code", "title"]),
     invoices: readRecordArray(source, ["invoices"]).map(normalizeInvoice),
     payments: readRecordArray(source, ["payments"]).map(normalizePayment),
     paymentSchedules: readRecordArray(source, ["paymentSchedules", "schedules"]).map(normalizeSchedule),
+    notes: readString(source, ["notes"]),
     propertyId: readNumber(source, ["propertyId"]),
+    propertyName: readString(source, ["propertyName"]),
+    remainingAmount: readNumber(source, ["remainingAmount"]),
     receipts: readRecordArray(source, ["receipts"]).map(normalizeReceipt),
     status: readString(source, ["status"], "PENDING"),
-    title: readString(source, ["title", "name"], "Untitled transaction"),
-    totalAmount: readNumber(source, ["totalAmount", "amount", "value"])
+    title: readString(source, ["title", "name", "code"], "Untitled transaction"),
+    totalAmount: readNumber(source, ["totalAmount", "agreedValue", "amount", "value"]),
+    transactionDate: readString(source, ["transactionDate"]),
+    transactionType: readString(source, ["transactionType", "type"], "SALE")
   };
 }
 
 function toQueryParams(params: TransactionSearchParams): QueryParams {
   return {
+    agentId: params.agentId,
+    customerId: params.customerId,
     keyword: params.keyword,
     page: params.page,
+    propertyId: params.propertyId,
     size: params.size,
-    status: params.status
+    status: params.status,
+    transactionType: params.transactionType
   };
 }
 

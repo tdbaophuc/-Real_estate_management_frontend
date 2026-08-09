@@ -1,41 +1,29 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, FileUp, Send, Signature, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CloudUpload, Download, Eye, FileText, FileUp, Send, Signature, XCircle } from "lucide-react";
 import { normalizeUnknownError } from "../../shared/api/errors";
+import { downloadFile } from "../../shared/api/fileApi";
 import { useAuth } from "../../shared/auth/useAuth";
 import { Button } from "../../shared/ui/Button";
 import { Dialog } from "../../shared/ui/Dialog";
 import { EmptyState } from "../../shared/ui/EmptyState";
-import { FileUploader } from "../../shared/ui/FileUploader";
-import { Input } from "../../shared/ui/Input";
-import { Select } from "../../shared/ui/Select";
-import { StatusBadge } from "../../shared/ui/StatusBadge";
-import { formatCurrency } from "../../shared/lib/format";
 import type { RoleCode } from "../../shared/types/auth";
-import { ContractForm, toContractRequest, type ContractFormValues } from "./ContractForm";
 import {
   getContract,
   runContractWorkflowAction,
-  updateContract,
   uploadContractDocument,
-  type ContractDocumentType,
   type ContractWorkflowAction
 } from "./contractApi";
 
-const documentTypeOptions = [
-  { label: "Draft", value: "DRAFT" },
-  { label: "Final", value: "FINAL" },
-  { label: "Signed", value: "SIGNED" },
-  { label: "Attachment", value: "ATTACHMENT" }
-];
-
 const actionLabels: Record<ContractWorkflowAction, string> = {
-  approve: "Approve",
+  approve: "Approve Contract",
   cancel: "Cancel",
-  "mark-signed": "Mark signed",
-  "submit-review": "Submit review"
+  "mark-signed": "Mark as Signed",
+  "submit-review": "Submit for Legal Review"
 };
+
+const workflowDisplayActions: ContractWorkflowAction[] = ["submit-review", "approve", "mark-signed"];
 
 function statusTone(status: string) {
   if (status === "SIGNED" || status === "ACTIVE") {
@@ -97,15 +85,43 @@ function actionIcon(action: ContractWorkflowAction) {
   return <XCircle size={16} />;
 }
 
+function formatOptionalDate(value: string) {
+  if (!value) {
+    return "Updating";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("en-US", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      }).format(date);
+}
+
+function formatUsdValue(value: number | null) {
+  if (value == null) {
+    return "Updating";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(value);
+}
+
+function documentTypeLabel(type: string) {
+  return type ? type.split("_").join(" ") : "ATTACHMENT";
+}
+
 export function ContractDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [documentType, setDocumentType] = useState<ContractDocumentType>("SIGNED");
-  const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
-  const [primaryDocument, setPrimaryDocument] = useState(true);
   const [pendingAction, setPendingAction] = useState<ContractWorkflowAction | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const contractQuery = useQuery({
@@ -119,32 +135,21 @@ export function ContractDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["contract", id] }),
       queryClient.invalidateQueries({ queryKey: ["contracts"] })
     ]);
-  const updateMutation = useMutation({
-    mutationFn: (values: ContractFormValues) => updateContract(id ?? "", toContractRequest(values)),
-    onSuccess: (contract) => {
-      queryClient.setQueryData(["contract", id], contract);
-      return invalidateContractData();
-    }
-  });
   const uploadMutation = useMutation({
-    mutationFn: () => {
-      if (!selectedFile) {
+    mutationFn: (file: File) => {
+      if (!file) {
         throw new Error("Choose a document to upload.");
       }
 
       return uploadContractDocument(id ?? "", {
-        description: description || undefined,
-        displayName: displayName || selectedFile.name,
-        documentType,
-        file: selectedFile,
-        primaryDocument
+        displayName: file.name,
+        documentType: "ATTACHMENT",
+        file,
+        primaryDocument: false
       });
     },
     onSuccess: () => {
       setSelectedFile(null);
-      setDisplayName("");
-      setDescription("");
-      setPrimaryDocument(true);
       return invalidateContractData();
     }
   });
@@ -166,11 +171,39 @@ export function ContractDetailPage() {
       return invalidateContractData();
     }
   });
+  const documentDownloadMutation = useMutation({
+    mutationFn: (document: { displayName: string; fileId: number | string | null; url: string }) => {
+      if (document.fileId) {
+        return downloadFile(document.fileId, document.displayName);
+      }
+
+      if (document.url) {
+        window.open(document.url, "_blank", "noopener,noreferrer");
+        return Promise.resolve();
+      }
+
+      throw new Error("No downloadable file is linked to this document.");
+    }
+  });
   const contract = contractQuery.data;
   const normalizedError = contractQuery.error ? normalizeUnknownError(contractQuery.error) : null;
-  const actionError = updateMutation.error ?? uploadMutation.error ?? workflowMutation.error;
+  const actionError =
+    uploadMutation.error ??
+    workflowMutation.error ??
+    documentDownloadMutation.error;
   const normalizedActionError = actionError ? normalizeUnknownError(actionError) : null;
   const availableActions = contract ? getAvailableActions(contract.status, user?.roles ?? []) : [];
+  const counterparty = contract?.parties[0]?.fullName ?? (contract?.customerId ? `Customer #${contract.customerId}` : "Not linked");
+  const primaryDocumentRecord = contract?.documents.find((document) => document.primaryDocument) ?? contract?.documents[0];
+
+  function uploadSelectedFile(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setSelectedFile(file);
+    uploadMutation.mutate(file);
+  }
 
   if (!id) {
     return (
@@ -191,8 +224,14 @@ export function ContractDetailPage() {
 
   if (normalizedError) {
     return (
-      <section className="content-section">
-        <EmptyState title="Contract could not be loaded" description={normalizedError.message} action={<Button onClick={() => contractQuery.refetch()}>Retry</Button>} />
+      <section className="contract-detail-page">
+        <div className="contract-detail-workspace">
+          <main className="contract-main-column">
+            <section className="content-section">
+              <EmptyState title="Contract could not be loaded" description={normalizedError.message} action={<Button onClick={() => contractQuery.refetch()}>Retry</Button>} />
+            </section>
+          </main>
+        </div>
       </section>
     );
   }
@@ -202,140 +241,191 @@ export function ContractDetailPage() {
   }
 
   return (
-    <section>
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/contracts">
-          <ArrowLeft size={16} />
-          Back to contracts
-        </Link>
-      </Button>
-      <div className="detail-header">
-        <div>
-          <div className="detail-badges">
-            <StatusBadge tone={statusTone(contract.status)}>{contract.status}</StatusBadge>
-            <StatusBadge tone="info">{contract.contractType}</StatusBadge>
+    <section className="contract-detail-page">
+      <header className="contract-page-header">
+        <div className="contract-page-title">
+          <nav className="contract-breadcrumb" aria-label="Contract breadcrumb">
+            <Link to="/contracts">
+              <ArrowLeft size={16} />
+              Contracts
+            </Link>
+            <span>/</span>
+            <strong>{contract.code}</strong>
+          </nav>
+          <div>
+            <h1>{contract.title}</h1>
+            {contract.propertyAddress ? <p>{contract.propertyAddress}</p> : null}
           </div>
-          <h1>{contract.title}</h1>
-          <p className="muted">{contract.code}</p>
         </div>
-      </div>
-      {normalizedActionError ? <p className="form-alert">{normalizedActionError.message}</p> : null}
-      <div className="contract-detail-grid">
-        <section className="content-section contract-profile-card">
-          <p className="eyebrow">Metadata</p>
-          <div><span>Value</span><strong>{contract.totalValue ? formatCurrency(contract.totalValue, contract.currency) : "Updating"}</strong></div>
-          <div><span>Customer</span><strong>{contract.customerId ?? "Not linked"}</strong></div>
-          <div><span>Property</span><strong>{contract.propertyId ?? "Not linked"}</strong></div>
-          <div><span>Listing</span><strong>{contract.listingId ?? "Not linked"}</strong></div>
-          <div><span>Transaction</span><strong>{contract.transactionId ?? "Not linked"}</strong></div>
-          <div><span>Effective date</span><strong>{contract.effectiveDate || "Updating"}</strong></div>
-        </section>
-        <section className="content-section">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Workflow</p>
-              <h2>Contract actions</h2>
+        <div className="contract-header-actions">
+          <Button
+            variant="secondary"
+            disabled={!primaryDocumentRecord || documentDownloadMutation.isPending}
+            onClick={() => primaryDocumentRecord ? documentDownloadMutation.mutate(primaryDocumentRecord) : undefined}
+          >
+            <Download size={16} />
+            Export PDF
+          </Button>
+          <Button asChild>
+            <Link to={`/contracts/${contract.id}/edit`}>
+              <FileText size={16} />
+              Edit Contract
+            </Link>
+          </Button>
+        </div>
+      </header>
+      <div className="contract-detail-workspace">
+        <main className="contract-main-column">
+          {normalizedActionError ? <p className="form-alert contract-inline-alert">{normalizedActionError.message}</p> : null}
+          <section className="contract-card-surface contract-particulars-card">
+            <div className="contract-card-heading">
+              <p className="contract-section-title">Contract Particulars</p>
+              <span className={`contract-signature-badge contract-signature-badge-${statusTone(contract.status)}`}>
+                {contract.status.split("_").join(" ")}
+              </span>
             </div>
-          </div>
-          <div className="contract-action-grid">
-            {availableActions.length ? availableActions.map((action) => (
-              <Button
-                key={action}
-                variant={action === "cancel" ? "danger" : "secondary"}
-                disabled={workflowMutation.isPending}
-                onClick={() => setPendingAction(action)}
+            <div className="contract-particulars-grid">
+              <div className="contract-field-group">
+                <span>Counterparty</span>
+                <strong>{counterparty}</strong>
+              </div>
+              <div className="contract-field-group">
+                <span>Total Value</span>
+                <strong className="contract-total-value">{formatUsdValue(contract.totalValue)}</strong>
+              </div>
+              <div className="contract-field-group">
+                <span>Effective Date</span>
+                <strong>{formatOptionalDate(contract.effectiveDate)}</strong>
+              </div>
+              <div className="contract-field-group">
+                <span>Expiration Date</span>
+                <strong>{formatOptionalDate(contract.endDate)}</strong>
+              </div>
+            </div>
+            <div className="contract-special-conditions">
+              <span>Special Conditions</span>
+              <p>{contract.specialConditions || "No special conditions returned for this contract."}</p>
+            </div>
+          </section>
+
+          <section className="contract-card-surface">
+            <div className="contract-card-heading">
+              <p className="contract-section-title">Associated Documents</p>
+              <FileUp size={20} />
+            </div>
+            <div className="contract-document-panel">
+              <label
+                className="contract-upload-zone"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  uploadSelectedFile(event.dataTransfer.files[0]);
+                }}
               >
-                {actionIcon(action)}
-                {actionLabels[action]}
-              </Button>
-            )) : <p className="muted">No contract action is available for your role and this status.</p>}
-          </div>
-        </section>
-      </div>
-      <section className="content-section">
-        <div className="section-header">
-          <div>
-            <p className="eyebrow">Update</p>
-            <h2>Edit contract</h2>
-          </div>
-        </div>
-        <ContractForm
-          contract={contract}
-          submitLabel="Save contract"
-          onSubmit={(values) => updateMutation.mutateAsync(values).then(() => undefined)}
-        />
-      </section>
-      <div className="contract-detail-grid">
-        <section className="content-section">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Documents</p>
-              <h2>Contract documents</h2>
+                <CloudUpload size={26} />
+                <span>Drag & drop files here or click to browse (PDF, DOCX)</span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(event) => uploadSelectedFile(event.target.files?.[0])}
+                />
+              </label>
             </div>
-            <FileUp size={20} />
-          </div>
-          <form className="contract-upload-form" onSubmit={(event) => {
-            event.preventDefault();
-            uploadMutation.mutate();
-          }}>
-            <FileUploader onFilesSelected={(files) => setSelectedFile(files[0] ?? null)} />
-            <Select label="Document type" options={documentTypeOptions} value={documentType} onChange={(event) => setDocumentType(event.target.value as ContractDocumentType)} />
-            <Input label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
-            <Input label="Description" value={description} onChange={(event) => setDescription(event.target.value)} />
-            <label className="toggle-field">
-              <input type="checkbox" checked={primaryDocument} onChange={(event) => setPrimaryDocument(event.target.checked)} />
-              <span>Primary</span>
-            </label>
-            <Button type="submit" disabled={!selectedFile || uploadMutation.isPending}>Upload document</Button>
-          </form>
-          {selectedFile ? <p className="muted">Selected: {selectedFile.name}</p> : null}
-          <div className="customer-list-stack">
-            {contract.documents.length ? contract.documents.map((document) => (
-              <article key={document.id}>
-                <strong>{document.displayName}</strong>
-                <small>{document.documentType}{document.primaryDocument ? " / primary" : ""}</small>
-                {document.description ? <small>{document.description}</small> : null}
-                {document.url ? <a href={document.url} target="_blank" rel="noreferrer">Open document</a> : null}
-              </article>
-            )) : <p className="muted">No documents uploaded.</p>}
-          </div>
-        </section>
-        <section className="content-section">
-          <div className="section-header">
-            <div>
-              <p className="eyebrow">Parties</p>
-              <h2>Contract parties</h2>
+            {selectedFile ? <p className="contract-selected-file">{uploadMutation.isPending ? "Uploading" : "Selected"}: {selectedFile.name}</p> : null}
+            <div className="contract-document-list">
+              {contract.documents.length ? contract.documents.map((document) => (
+                <article key={document.id} className={document.primaryDocument ? "is-primary" : undefined}>
+                  <div className="contract-document-type">{documentTypeLabel(document.documentType)}</div>
+                  <div className="contract-document-copy">
+                    <strong>{document.displayName}</strong>
+                    <small>{[document.sizeLabel, formatOptionalDate(document.uploadedAt), document.primaryDocument ? "Primary" : ""].filter(Boolean).join(" / ") || "Metadata updating"}</small>
+                    {document.description ? <p>{document.description}</p> : null}
+                  </div>
+                  <div className="contract-document-actions">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      title="View details"
+                      disabled={!document.url && documentDownloadMutation.isPending}
+                      onClick={() => document.url ? window.open(document.url, "_blank", "noopener,noreferrer") : documentDownloadMutation.mutate(document)}
+                    >
+                      <Eye size={16} />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      title="Download"
+                      disabled={documentDownloadMutation.isPending}
+                      onClick={() => documentDownloadMutation.mutate(document)}
+                    >
+                      <Download size={16} />
+                    </Button>
+                  </div>
+                </article>
+              )) : <p className="muted">No documents uploaded.</p>}
             </div>
-          </div>
-          <div className="customer-list-stack">
-            {contract.parties.length ? contract.parties.map((party) => (
-              <article key={party.id}>
-                <strong>{party.fullName}</strong>
-                <small>{party.role}</small>
-                <small>{[party.email, party.phone].filter(Boolean).join(" / ") || "Contact updating"}</small>
-              </article>
-            )) : <p className="muted">No party metadata returned.</p>}
-          </div>
-        </section>
+          </section>
+
+          <section className="contract-card-surface">
+            <p className="contract-section-title">Contract Parties</p>
+            <div className="contract-party-list">
+              {contract.parties.length ? contract.parties.map((party) => (
+                <article key={party.id}>
+                  <strong>{party.fullName}</strong>
+                  <small>{party.role}</small>
+                  <small>{[party.email, party.phone].filter(Boolean).join(" / ") || "Contact updating"}</small>
+                </article>
+              )) : <p className="muted">No party metadata returned.</p>}
+            </div>
+          </section>
+        </main>
+
+        <aside className="contract-side-column">
+          <section className="contract-card-surface contract-workflow-card">
+            <p className="contract-section-title">Workflow Actions</p>
+            <div className="contract-action-grid">
+              {workflowDisplayActions.map((action) => (
+                <Button
+                  key={action}
+                  className={action === "mark-signed" ? "contract-primary-workflow-action" : undefined}
+                  variant={action === "mark-signed" ? "primary" : "secondary"}
+                  disabled={workflowMutation.isPending || !availableActions.includes(action)}
+                  onClick={() => setPendingAction(action)}
+                  title={availableActions.includes(action) ? actionLabels[action] : "Unavailable for current status or role"}
+                >
+                  {actionIcon(action)}
+                  {actionLabels[action]}
+                </Button>
+              ))}
+            </div>
+          </section>
+
+          <section className="contract-card-surface contract-version-card">
+            <p className="contract-section-title">Version History</p>
+            <div className="contract-version-timeline">
+              {contract.timeline.length ? contract.timeline.map((item) => (
+                <article key={item.id}>
+                  <span aria-hidden="true" />
+                  <div>
+                    <strong>{item.title}</strong>
+                    {item.timestamp ? <time>{formatOptionalDate(item.timestamp)}</time> : null}
+                    <p>{item.description}</p>
+                  </div>
+                </article>
+              )) : (
+                <article>
+                  <span aria-hidden="true" />
+                  <div>
+                    <strong>No version history</strong>
+                    <p>No timeline returned for this contract.</p>
+                  </div>
+                </article>
+              )}
+            </div>
+          </section>
+
+        </aside>
       </div>
-      <section className="content-section">
-        <div className="section-header">
-          <div>
-            <p className="eyebrow">Timeline</p>
-            <h2>Status timeline</h2>
-          </div>
-        </div>
-        <div className="timeline-list">
-          {contract.timeline.length ? contract.timeline.map((item) => (
-            <article key={item.id}>
-              <span>{item.type}</span>
-              <strong>{item.title}</strong>
-              <p>{item.description}</p>
-              {item.timestamp ? <small>{item.timestamp}</small> : null}
-            </article>
-          )) : <p className="muted">No timeline returned.</p>}
-        </div>
-      </section>
       <Dialog open={Boolean(pendingAction)} onClose={() => setPendingAction(null)} title="Confirm contract action">
         <div className="dialog-body">
           <p>Confirm {pendingAction ? actionLabels[pendingAction].toLowerCase() : "this action"} for contract {contract.code}?</p>

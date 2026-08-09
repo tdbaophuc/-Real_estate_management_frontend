@@ -2,21 +2,22 @@ import type { RoleCode } from "../types/auth";
 
 export type NavigationItem = {
   href: string;
-  label: string;
+  labelKey: string;
   icon:
   | "dashboard"
+  | "browse"
   | "favorites"
   | "properties"
   | "listings"
   | "customers"
   | "leads"
+  | "tasks"
   | "appointments"
   | "contracts"
+  | "documents"
   | "transactions"
   | "commissions"
-  | "notifications"
   | "reports"
-  | "ai"
   | "admin";
   roles: RoleCode[];
 };
@@ -24,91 +25,133 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   {
     href: "/dashboard",
-    label: "Dashboard",
+    labelKey: "navigation.dashboard",
     icon: "dashboard",
     roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
   },
   {
+    href: "/owner/dashboard",
+    labelKey: "navigation.dashboard",
+    icon: "dashboard",
+    roles: ["OWNER"]
+  },
+  {
+    href: "/search",
+    labelKey: "navigation.browseListings",
+    icon: "browse",
+    roles: ["CUSTOMER"]
+  },
+  {
     href: "/favorites",
-    label: "Favorites",
+    labelKey: "navigation.favorites",
     icon: "favorites",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
+    roles: ["CUSTOMER"]
   },
   {
     href: "/properties",
-    label: "Properties",
+    labelKey: "navigation.properties",
     icon: "properties",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/owner/properties",
+    labelKey: "navigation.ownerProperties",
+    icon: "properties",
+    roles: ["OWNER"]
+  },
+  {
     href: "/listings",
-    label: "Listings",
+    labelKey: "navigation.listings",
     icon: "listings",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/owner/listings",
+    labelKey: "navigation.ownerListings",
+    icon: "listings",
+    roles: ["OWNER"]
+  },
+  {
+    href: "/owner/documents",
+    labelKey: "navigation.ownerDocuments",
+    icon: "documents",
+    roles: ["OWNER"]
+  },
+  {
     href: "/customers",
-    label: "Customers",
+    labelKey: "navigation.customers",
     icon: "customers",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
     href: "/leads",
-    label: "Leads",
+    labelKey: "navigation.leads",
     icon: "leads",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
-    href: "/appointments",
-    label: "Appointments",
-    icon: "appointments",
+    href: "/follow-up-tasks",
+    labelKey: "navigation.followUpTasks",
+    icon: "tasks",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/appointments",
+    labelKey: "navigation.appointments",
+    icon: "appointments",
+    roles: ["ADMIN", "MANAGER"]
+  },
+  {
+    href: "/appointments/my",
+    labelKey: "navigation.appointments",
+    icon: "appointments",
+    roles: ["AGENT"]
+  },
+  {
     href: "/contracts",
-    label: "Contracts",
+    labelKey: "navigation.contracts",
     icon: "contracts",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
+    href: "/owner/contracts",
+    labelKey: "navigation.contracts",
+    icon: "contracts",
+    roles: ["OWNER"]
+  },
+  {
     href: "/transactions",
-    label: "Transactions",
+    labelKey: "navigation.transactions",
     icon: "transactions",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
-    href: "/commissions",
-    label: "Commissions",
+    href: "/owner/transactions",
+    labelKey: "navigation.transactions",
+    icon: "transactions",
+    roles: ["OWNER"]
+  },
+  {
+    href: "/commissions/my",
+    labelKey: "navigation.commissions",
     icon: "commissions",
     roles: ["ADMIN", "MANAGER", "AGENT"]
   },
   {
-    href: "/notifications",
-    label: "Notifications",
-    icon: "notifications",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
-  },
-  {
     href: "/reports",
-    label: "Reports",
+    labelKey: "navigation.reports",
     icon: "reports",
     roles: ["ADMIN", "MANAGER"]
   },
   {
-    href: "/ai",
-    label: "AI Assistant",
-    icon: "ai",
-    roles: ["ADMIN", "MANAGER", "AGENT", "CUSTOMER"]
-  },
-  {
     href: "/admin/users",
-    label: "Admin Users",
+    labelKey: "navigation.adminUsers",
     icon: "admin",
     roles: ["ADMIN"]
   },
   {
     href: "/admin/audit-logs",
-    label: "Audit Logs",
+    labelKey: "navigation.auditLogs",
     icon: "admin",
     roles: ["ADMIN"]
   }

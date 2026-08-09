@@ -37,8 +37,8 @@ const dashboardCopy: Record<DashboardRole, Pick<RoleDashboard, "actions" | "summ
   AGENT: {
     actions: [
       { href: "/leads", label: "Open leads", text: "Work assigned opportunities." },
+      { href: "/follow-up-tasks", label: "Follow-up tasks", text: "Prioritize due tasks and next actions." },
       { href: "/appointments", label: "My appointments", text: "Prepare for viewings and follow-ups." },
-      { href: "/commissions", label: "Commissions", text: "Track personal commission status." }
     ],
     summary: "Assigned sales work, appointments, and commission progress.",
     title: "Agent dashboard"
@@ -46,8 +46,8 @@ const dashboardCopy: Record<DashboardRole, Pick<RoleDashboard, "actions" | "summ
   MANAGER: {
     actions: [
       { href: "/listings", label: "Review listings", text: "Moderate listing workflow and approvals." },
+      { href: "/follow-up-tasks", label: "Team follow-up", text: "Review assigned and overdue follow-up tasks." },
       { href: "/reports", label: "Team reports", text: "Review performance and revenue signals." },
-      { href: "/commissions", label: "Commissions", text: "Approve and mark payouts." }
     ],
     summary: "Team operations, approvals, and sales performance.",
     title: "Manager dashboard"

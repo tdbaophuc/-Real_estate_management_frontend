@@ -24,6 +24,8 @@ type ApiAuthConfig = {
 type RefreshTokenResponse = Partial<AuthSession> & {
   accessToken: string;
   expiresIn?: number;
+  refreshExpiresIn?: number;
+  tokenType?: string;
 };
 
 let authConfig: ApiAuthConfig | null = null;
@@ -139,9 +141,7 @@ async function executeRequest<T>(path: string, options: ApiRequestOptions = {}) 
   return parsedBody as T;
 }
 
-async function refreshAccessToken() {
-  const refreshToken = authConfig?.getRefreshToken();
-
+export async function refreshAuthSession(refreshToken: string) {
   if (!refreshToken) {
     throw normalizeApiError(401, undefined, "Missing refresh token");
   }
@@ -152,11 +152,22 @@ async function refreshAccessToken() {
     skipAuth: true,
     skipRefresh: true
   });
-  const nextSession = {
+
+  return {
     accessToken: session.accessToken,
     expiresInSeconds: session.expiresInSeconds ?? session.expiresIn ?? 0,
     refreshToken: session.refreshToken ?? refreshToken
   };
+}
+
+async function refreshAccessToken() {
+  const refreshToken = authConfig?.getRefreshToken();
+
+  if (!refreshToken) {
+    throw normalizeApiError(401, undefined, "Missing refresh token");
+  }
+
+  const nextSession = await refreshAuthSession(refreshToken);
 
   authConfig?.onRefresh(nextSession);
   return nextSession;
@@ -199,6 +210,21 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 export const apiClient = {
   delete: <T>(path: string, options?: ApiRequestOptions) =>
     apiRequest<T>(path, { ...options, method: "DELETE" }),
+  downloadBlob: async (path: string, options: ApiRequestOptions = {}) => {
+    const { body: _body, query, skipAuth, skipRefresh, ...fetchOptions } = options;
+    const response = await fetch(createUrl(path, query), {
+      ...fetchOptions,
+      headers: createHeaders({ ...options, skipAuth, skipRefresh }, false),
+      method: options.method ?? "GET"
+    });
+
+    if (!response.ok) {
+      const parsedBody = await parseResponse(response);
+      throw normalizeApiError(response.status, parsedBody, response.statusText);
+    }
+
+    return response.blob();
+  },
   get: <T>(path: string, options?: ApiRequestOptions) =>
     apiRequest<T>(path, { ...options, method: "GET" }),
   patch: <T>(path: string, body?: ApiRequestOptions["body"], options?: ApiRequestOptions) =>

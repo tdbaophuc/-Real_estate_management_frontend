@@ -4,6 +4,8 @@ export type CurrentUser = {
   id: number;
   email: string;
   fullName: string;
+  avatarUrl?: string;
+  phone?: string;
   roles: RoleCode[];
 };
 

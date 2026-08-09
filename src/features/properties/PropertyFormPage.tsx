@@ -11,6 +11,13 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Input } from "../../shared/ui/Input";
 import { Select } from "../../shared/ui/Select";
 import {
+  getAmenities,
+  getDistricts,
+  getPropertyTypes,
+  getProvinces,
+  getWards
+} from "../master-data/masterDataApi";
+import {
   createProperty,
   getProperty,
   updateProperty,
@@ -49,6 +56,8 @@ const propertyFormSchema = z.object({
   provinceId: optionalNumber,
   purpose: z.enum(["SALE", "RENT"]),
   street: z.string().trim().optional(),
+  videoUrl: z.string().trim().optional(),
+  virtualTourUrl: z.string().trim().optional(),
   wardId: optionalNumber
 });
 
@@ -87,6 +96,26 @@ const furnitureOptions = [
   { label: "Fully furnished", value: "FULLY_FURNISHED" }
 ];
 
+function toSelectOptions(
+  items: Array<{ id: number; name: string; code?: string }> | undefined,
+  placeholder: string,
+  currentValue?: string
+) {
+  const options = [
+    { label: placeholder, value: "" },
+    ...(items ?? []).map((item) => ({
+      label: item.code ? `${item.name} (${item.code})` : item.name,
+      value: String(item.id)
+    }))
+  ];
+
+  if (currentValue && !options.some((option) => option.value === currentValue)) {
+    options.push({ label: `Current #${currentValue}`, value: currentValue });
+  }
+
+  return options;
+}
+
 function toNumber(value: string) {
   return value.trim() ? Number(value) : undefined;
 }
@@ -104,7 +133,7 @@ function toDefaultValues(property?: PropertyRecord): PropertyFormValues {
     currency: property?.currency ?? "VND",
     description: property?.description ?? "",
     direction: property?.direction === "UNKNOWN" ? "" : property?.direction ?? "",
-    districtId: "",
+    districtId: property?.address.districtId ? String(property.address.districtId) : "",
     floorArea: property?.floorArea ? String(property.floorArea) : "",
     floors: property?.floors ? String(property.floors) : "",
     furnitureStatus: property?.furnitureStatus === "UNKNOWN" ? "" : property?.furnitureStatus ?? "",
@@ -116,10 +145,12 @@ function toDefaultValues(property?: PropertyRecord): PropertyFormValues {
     ownerId: property?.ownerId ? String(property.ownerId) : "",
     price: property?.price ? String(property.price) : "",
     propertyTypeId: property?.propertyTypeId ? String(property.propertyTypeId) : "",
-    provinceId: "",
+    provinceId: property?.address.provinceId ? String(property.address.provinceId) : "",
     purpose: property?.purpose ?? "SALE",
-    street: "",
-    wardId: ""
+    street: property?.address.streetAddress ?? "",
+    videoUrl: property?.videoUrl ?? "",
+    virtualTourUrl: property?.virtualTourUrl ?? "",
+    wardId: property?.address.wardId ? String(property.address.wardId) : ""
   };
 }
 
@@ -128,19 +159,19 @@ function toRequest(values: PropertyFormValues): PropertyUpsertRequest {
 
   return {
     address: {
-      addressLine: values.addressLine || undefined,
+      fullAddress: values.addressLine || undefined,
       districtId: toNumber(values.districtId),
       latitude: toNumber(values.latitude),
       longitude: toNumber(values.longitude),
       provinceId: toNumber(values.provinceId),
-      street: values.street || undefined,
+      streetAddress: values.street || undefined,
       wardId: toNumber(values.wardId)
     },
     amenities: amenityId
       ? [
           {
             amenityId,
-            note: values.amenityNote || undefined
+            details: values.amenityNote || undefined
           }
         ]
       : [],
@@ -161,7 +192,9 @@ function toRequest(values: PropertyFormValues): PropertyUpsertRequest {
     ownerId: toNumber(values.ownerId),
     price: Number(values.price),
     propertyTypeId: Number(values.propertyTypeId),
-    purpose: values.purpose
+    purpose: values.purpose,
+    videoUrl: values.videoUrl || undefined,
+    virtualTourUrl: values.virtualTourUrl || undefined
   };
 }
 
@@ -174,11 +207,33 @@ function FormSection({ children, title }: { children: ReactNode; title: string }
   );
 }
 
+const formSteps = [
+  "Basic Information",
+  "Pricing & Address",
+  "Attributes",
+  "Legal & Amenities",
+  "Assignment"
+];
+
+const formStepFields: Array<Array<keyof PropertyFormValues>> = [
+  ["code", "name", "purpose", "propertyTypeId", "availableFrom", "description"],
+  ["price", "currency", "landArea", "floorArea", "provinceId", "districtId", "wardId", "street", "addressLine", "latitude", "longitude"],
+  ["bedrooms", "bathrooms", "floors", "direction", "videoUrl", "virtualTourUrl"],
+  ["legalStatus", "furnitureStatus", "amenityId", "amenityNote"],
+  ["ownerId", "assignedAgentId"]
+];
+
+function stepForField(field: keyof PropertyFormValues) {
+  const stepIndex = formStepFields.findIndex((fields) => fields.includes(field));
+  return stepIndex >= 0 ? stepIndex : 0;
+}
+
 export function PropertyFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
   const [formError, setFormError] = useState<string | null>(null);
+  const [activeStep, setActiveStep] = useState(0);
   const propertyQuery = useQuery({
     enabled: isEditMode,
     queryFn: () => getProperty(id ?? ""),
@@ -191,11 +246,68 @@ export function PropertyFormPage() {
     handleSubmit,
     register,
     reset,
-    setError
+    setError,
+    setValue,
+    trigger,
+    watch
   } = useForm<PropertyFormValues>({
     defaultValues,
     resolver: zodResolver(propertyFormSchema)
   });
+  const selectedProvinceId = watch("provinceId");
+  const selectedDistrictId = watch("districtId");
+  const propertyTypesQuery = useQuery({
+    queryFn: getPropertyTypes,
+    queryKey: ["master-data", "property-types"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const provincesQuery = useQuery({
+    queryFn: getProvinces,
+    queryKey: ["master-data", "provinces"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const districtsQuery = useQuery({
+    enabled: Boolean(selectedProvinceId),
+    queryFn: () => getDistricts(selectedProvinceId),
+    queryKey: ["master-data", "districts", selectedProvinceId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const wardsQuery = useQuery({
+    enabled: Boolean(selectedDistrictId),
+    queryFn: () => getWards(selectedDistrictId),
+    queryKey: ["master-data", "wards", selectedDistrictId],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const amenitiesQuery = useQuery({
+    queryFn: () => getAmenities(),
+    queryKey: ["master-data", "amenities"],
+    retry: 1,
+    staleTime: 5 * 60 * 1000
+  });
+  const propertyTypeOptions = useMemo(
+    () => toSelectOptions(propertyTypesQuery.data, "Select property type", defaultValues.propertyTypeId),
+    [defaultValues.propertyTypeId, propertyTypesQuery.data]
+  );
+  const provinceOptions = useMemo(
+    () => toSelectOptions(provincesQuery.data, "Select province", defaultValues.provinceId),
+    [defaultValues.provinceId, provincesQuery.data]
+  );
+  const districtOptions = useMemo(
+    () => toSelectOptions(districtsQuery.data, selectedProvinceId ? "Select district" : "Select province first", defaultValues.districtId),
+    [defaultValues.districtId, districtsQuery.data, selectedProvinceId]
+  );
+  const wardOptions = useMemo(
+    () => toSelectOptions(wardsQuery.data, selectedDistrictId ? "Select ward" : "Select district first", defaultValues.wardId),
+    [defaultValues.wardId, selectedDistrictId, wardsQuery.data]
+  );
+  const amenityOptions = useMemo(
+    () => toSelectOptions(amenitiesQuery.data, "No amenity", defaultValues.amenityId),
+    [amenitiesQuery.data, defaultValues.amenityId]
+  );
   const saveMutation = useMutation({
     mutationFn: (values: PropertyFormValues) =>
       isEditMode ? updateProperty(id ?? "", toRequest(values)) : createProperty(toRequest(values))
@@ -224,7 +336,21 @@ export function PropertyFormPage() {
 
       setFormError(normalizedError.message);
     }
+  }, (submitErrors) => {
+    const firstError = Object.keys(submitErrors)[0] as keyof PropertyFormValues | undefined;
+
+    if (firstError) {
+      setActiveStep(stepForField(firstError));
+    }
   });
+
+  async function goToNextStep() {
+    const isStepValid = await trigger(formStepFields[activeStep], { shouldFocus: true });
+
+    if (isStepValid) {
+      setActiveStep((step) => Math.min(step + 1, formSteps.length - 1));
+    }
+  }
 
   if (propertyQuery.isLoading) {
     return (
@@ -248,7 +374,7 @@ export function PropertyFormPage() {
   }
 
   return (
-    <section>
+    <section className="property-form-page">
       <Button asChild variant="ghost" size="sm">
         <Link to={isEditMode ? `/properties/${id}` : "/properties"}>
           <ArrowLeft size={16} />
@@ -259,58 +385,124 @@ export function PropertyFormPage() {
         <div>
           <p className="eyebrow">Properties</p>
           <h2>{isEditMode ? "Edit property" : "Create property"}</h2>
+          <p className="property-step-copy">Step {activeStep + 1} of {formSteps.length}: {formSteps[activeStep]}</p>
+          <div className="property-stepper" aria-label={`Step ${activeStep + 1} of ${formSteps.length}`}>
+            <span style={{ width: `${((activeStep + 1) / formSteps.length) * 100}%` }} />
+          </div>
         </div>
       </div>
       <form className="property-form" onSubmit={onSubmit}>
-        <FormSection title="Basic info">
-          <Input label="Code" error={errors.code?.message} {...register("code")} />
-          <Input label="Name" error={errors.name?.message} {...register("name")} />
-          <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
-          <Input label="Property type id" error={errors.propertyTypeId?.message} {...register("propertyTypeId")} />
-          <Input label="Available from" type="date" error={errors.availableFrom?.message} {...register("availableFrom")} />
-          <Input label="Description" error={errors.description?.message} {...register("description")} />
-        </FormSection>
-        <FormSection title="Price and area">
-          <Input label="Price" error={errors.price?.message} {...register("price")} />
-          <Input label="Currency" error={errors.currency?.message} onInput={(event) => {
-            event.currentTarget.value = event.currentTarget.value.toUpperCase();
-          }} {...register("currency")} />
-          <Input label="Land area" error={errors.landArea?.message} {...register("landArea")} />
-          <Input label="Floor area" error={errors.floorArea?.message} {...register("floorArea")} />
-        </FormSection>
-        <FormSection title="Address">
-          <Input label="Province id" error={errors.provinceId?.message} {...register("provinceId")} />
-          <Input label="District id" error={errors.districtId?.message} {...register("districtId")} />
-          <Input label="Ward id" error={errors.wardId?.message} {...register("wardId")} />
-          <Input label="Street" error={errors.street?.message} {...register("street")} />
-          <Input label="Address line" error={errors.addressLine?.message} {...register("addressLine")} />
-          <Input label="Latitude" error={errors.latitude?.message} {...register("latitude")} />
-          <Input label="Longitude" error={errors.longitude?.message} {...register("longitude")} />
-        </FormSection>
-        <FormSection title="Attributes">
-          <Input label="Bedrooms" error={errors.bedrooms?.message} {...register("bedrooms")} />
-          <Input label="Bathrooms" error={errors.bathrooms?.message} {...register("bathrooms")} />
-          <Input label="Floors" error={errors.floors?.message} {...register("floors")} />
-          <Select label="Direction" options={directionOptions} error={errors.direction?.message} {...register("direction")} />
-        </FormSection>
-        <FormSection title="Legal">
-          <Select label="Legal status" options={legalStatusOptions} error={errors.legalStatus?.message} {...register("legalStatus")} />
-          <Select label="Furniture status" options={furnitureOptions} error={errors.furnitureStatus?.message} {...register("furnitureStatus")} />
-        </FormSection>
-        <FormSection title="Amenities">
-          <Input label="Amenity id" error={errors.amenityId?.message} {...register("amenityId")} />
-          <Input label="Amenity note" error={errors.amenityNote?.message} {...register("amenityNote")} />
-        </FormSection>
-        <FormSection title="Assignment">
-          <Input label="Owner id" error={errors.ownerId?.message} {...register("ownerId")} />
-          <Input label="Assigned agent id" error={errors.assignedAgentId?.message} {...register("assignedAgentId")} />
-        </FormSection>
+        {activeStep === 0 ? (
+          <FormSection title="Basic information">
+            <Input label="Code" error={errors.code?.message} {...register("code")} />
+            <Input label="Name" error={errors.name?.message} {...register("name")} />
+            <Select label="Purpose" options={purposeOptions} error={errors.purpose?.message} {...register("purpose")} />
+            <Select
+              label="Property type"
+              options={propertyTypeOptions}
+              error={errors.propertyTypeId?.message}
+              disabled={propertyTypesQuery.isLoading}
+              {...register("propertyTypeId")}
+            />
+            <Input label="Available from" type="date" error={errors.availableFrom?.message} {...register("availableFrom")} />
+            <Input label="Description" error={errors.description?.message} {...register("description")} />
+          </FormSection>
+        ) : null}
+        {activeStep === 1 ? (
+          <>
+            <FormSection title="Price and area">
+              <Input label="Price" error={errors.price?.message} {...register("price")} />
+              <Input label="Currency" error={errors.currency?.message} onInput={(event) => {
+                event.currentTarget.value = event.currentTarget.value.toUpperCase();
+              }} {...register("currency")} />
+              <Input label="Land area" error={errors.landArea?.message} {...register("landArea")} />
+              <Input label="Floor area" error={errors.floorArea?.message} {...register("floorArea")} />
+            </FormSection>
+            <FormSection title="Address">
+              <Select
+                label="Province"
+                options={provinceOptions}
+                error={errors.provinceId?.message}
+                disabled={provincesQuery.isLoading}
+                {...register("provinceId", {
+                  onChange: () => {
+                    setValue("districtId", "");
+                    setValue("wardId", "");
+                  }
+                })}
+              />
+              <Select
+                label="District"
+                options={districtOptions}
+                error={errors.districtId?.message}
+                disabled={!selectedProvinceId || districtsQuery.isLoading}
+                {...register("districtId", {
+                  onChange: () => setValue("wardId", "")
+                })}
+              />
+              <Select
+                label="Ward"
+                options={wardOptions}
+                error={errors.wardId?.message}
+                disabled={!selectedDistrictId || wardsQuery.isLoading}
+                {...register("wardId")}
+              />
+              <Input label="Street address" error={errors.street?.message} {...register("street")} />
+              <Input label="Full address" error={errors.addressLine?.message} {...register("addressLine")} />
+              <Input label="Latitude" error={errors.latitude?.message} {...register("latitude")} />
+              <Input label="Longitude" error={errors.longitude?.message} {...register("longitude")} />
+            </FormSection>
+          </>
+        ) : null}
+        {activeStep === 2 ? (
+          <FormSection title="Attributes">
+            <Input label="Bedrooms" error={errors.bedrooms?.message} {...register("bedrooms")} />
+            <Input label="Bathrooms" error={errors.bathrooms?.message} {...register("bathrooms")} />
+            <Input label="Floors" error={errors.floors?.message} {...register("floors")} />
+            <Select label="Direction" options={directionOptions} error={errors.direction?.message} {...register("direction")} />
+            <Input label="Video URL" error={errors.videoUrl?.message} {...register("videoUrl")} />
+            <Input label="Virtual tour URL" error={errors.virtualTourUrl?.message} {...register("virtualTourUrl")} />
+          </FormSection>
+        ) : null}
+        {activeStep === 3 ? (
+          <>
+            <FormSection title="Legal">
+              <Select label="Legal status" options={legalStatusOptions} error={errors.legalStatus?.message} {...register("legalStatus")} />
+              <Select label="Furniture status" options={furnitureOptions} error={errors.furnitureStatus?.message} {...register("furnitureStatus")} />
+            </FormSection>
+            <FormSection title="Amenities">
+              <Select
+                label="Amenity"
+                options={amenityOptions}
+                error={errors.amenityId?.message}
+                disabled={amenitiesQuery.isLoading}
+                {...register("amenityId")}
+              />
+              <Input label="Amenity details" error={errors.amenityNote?.message} {...register("amenityNote")} />
+            </FormSection>
+          </>
+        ) : null}
+        {activeStep === 4 ? (
+          <FormSection title="Assignment">
+            <Input label="Owner id" error={errors.ownerId?.message} {...register("ownerId")} />
+            <Input label="Assigned agent id" error={errors.assignedAgentId?.message} {...register("assignedAgentId")} />
+          </FormSection>
+        ) : null}
         {formError ? <p className="form-alert">{formError}</p> : null}
         <div className="form-actions">
-          <Button type="submit" disabled={isSubmitting || saveMutation.isPending}>
-            <Save size={16} />
-            {isEditMode ? "Save changes" : "Create property"}
+          <Button type="button" variant="secondary" disabled={activeStep === 0} onClick={() => setActiveStep((step) => Math.max(step - 1, 0))}>
+            Back
           </Button>
+          {activeStep < formSteps.length - 1 ? (
+            <Button type="button" onClick={() => void goToNextStep()}>
+              Next
+            </Button>
+          ) : (
+            <Button type="submit" disabled={isSubmitting || saveMutation.isPending}>
+              <Save size={16} />
+              {isEditMode ? "Save changes" : "Create property"}
+            </Button>
+          )}
         </div>
       </form>
     </section>

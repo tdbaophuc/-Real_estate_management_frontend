@@ -1,5 +1,6 @@
 import { Dialog } from "./Dialog";
 import { Button } from "./Button";
+import { useText } from "../i18n/useText";
 
 type ConfirmDialogProps = {
   description: string;
@@ -16,16 +17,17 @@ export function ConfirmDialog({
   open,
   title
 }: ConfirmDialogProps) {
+  const tx = useText();
+
   return (
     <Dialog open={open} onClose={onCancel} title={title}>
       <div className="dialog-body">
-        <p>{description}</p>
+        <p>{tx(description)}</p>
       </div>
       <footer className="dialog-actions">
-        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button variant="danger" onClick={onConfirm}>Confirm</Button>
+        <Button variant="secondary" onClick={onCancel}>{tx("Cancel")}</Button>
+        <Button variant="danger" onClick={onConfirm}>{tx("Confirm")}</Button>
       </footer>
     </Dialog>
   );
 }
-

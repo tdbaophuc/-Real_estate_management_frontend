@@ -1,9 +1,20 @@
 export function formatCurrency(value: number, currency = "VND") {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0
-  }).format(value);
+  const normalizedCurrency = currency.trim().toUpperCase() || "VND";
+  const fractionDigits = normalizedCurrency === "USD" ? 2 : 0;
+
+  try {
+    return new Intl.NumberFormat(normalizedCurrency === "USD" ? "en-US" : "vi-VN", {
+      style: "currency",
+      currency: normalizedCurrency,
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: fractionDigits
+    }).format(value);
+  } catch {
+    return `${normalizedCurrency} ${new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: fractionDigits,
+      minimumFractionDigits: fractionDigits
+    }).format(value)}`;
+  }
 }
 
 export function formatDate(value: string | Date) {
@@ -11,4 +22,3 @@ export function formatDate(value: string | Date) {
     dateStyle: "medium"
   }).format(new Date(value));
 }
-

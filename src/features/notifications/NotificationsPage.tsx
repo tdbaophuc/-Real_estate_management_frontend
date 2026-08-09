@@ -7,6 +7,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { Pagination } from "../../shared/ui/Pagination";
 import { StatusBadge } from "../../shared/ui/StatusBadge";
 import { formatDate } from "../../shared/lib/format";
+import { useText } from "../../shared/i18n/useText";
 import {
   getNotifications,
   markAllNotificationsRead,
@@ -31,6 +32,8 @@ function NotificationRow({
   notification: AppNotification;
   onMarkRead: (notificationId: number | string) => void;
 }) {
+  const tx = useText();
+
   return (
     <article className="notification-row">
       <div className="notification-icon">
@@ -40,7 +43,7 @@ function NotificationRow({
         <div className="notification-title-line">
           <h3>{notification.title}</h3>
           <StatusBadge tone={notification.read ? "neutral" : "info"}>
-            {notification.read ? "Read" : "Unread"}
+            {notification.read ? tx("Read") : tx("Unread")}
           </StatusBadge>
         </div>
         <p>{notification.message}</p>
@@ -52,7 +55,7 @@ function NotificationRow({
       {!notification.read ? (
         <Button variant="secondary" size="sm" onClick={() => onMarkRead(notification.id)}>
           <CheckCheck size={16} />
-          Mark read
+          {tx("Mark read")}
         </Button>
       ) : null}
     </article>
@@ -60,6 +63,7 @@ function NotificationRow({
 }
 
 export function NotificationsPage() {
+  const tx = useText();
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
   const notificationsQuery = useQuery({
@@ -89,8 +93,8 @@ export function NotificationsPage() {
     <section>
       <div className="section-header">
         <div>
-          <p className="eyebrow">Notifications</p>
-          <h2>Notification center</h2>
+          <p className="eyebrow">{tx("Notifications")}</p>
+          <h2>{tx("Notification center")}</h2>
         </div>
         <Button
           variant="secondary"
@@ -99,7 +103,7 @@ export function NotificationsPage() {
           disabled={markAllMutation.isPending || !notificationsQuery.data?.content.length}
         >
           <CheckCheck size={16} />
-          Mark all read
+          {tx("Mark all read")}
         </Button>
       </div>
       {notificationsQuery.isLoading ? (
@@ -112,17 +116,17 @@ export function NotificationsPage() {
       {normalizedError ? (
         <div className="content-section">
           <EmptyState
-            title="Notifications could not be loaded"
+            title={tx("Notifications could not be loaded")}
             description={normalizedError.message}
-            action={<Button onClick={() => notificationsQuery.refetch()}>Retry</Button>}
+            action={<Button onClick={() => notificationsQuery.refetch()}>{tx("Retry")}</Button>}
           />
         </div>
       ) : null}
       {notificationsQuery.data && notificationsQuery.data.content.length === 0 ? (
         <div className="content-section">
           <EmptyState
-            title="No notifications"
-            description="Unread system updates and workflow alerts will appear here."
+            title={tx("No notifications")}
+            description={tx("Unread system updates and workflow alerts will appear here.")}
           />
         </div>
       ) : null}

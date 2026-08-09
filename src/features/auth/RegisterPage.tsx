@@ -2,6 +2,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { authApi } from "../../shared/auth/authApi";
 import { useAuth } from "../../shared/auth/useAuth";
@@ -11,21 +12,25 @@ import { Input } from "../../shared/ui/Input";
 
 const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/;
 
-const registerSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address"),
-  fullName: z.string().trim().min(2, "Full name must be at least 2 characters"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(passwordRule, "Use uppercase, lowercase, number, and special character"),
-  phone: z.string().trim().optional()
-});
+function createRegisterSchema(t: (key: string) => string) {
+  return z.object({
+    email: z.string().trim().email(t("validation.validEmailAddress")),
+    fullName: z.string().trim().min(2, t("validation.fullNameMin")),
+    password: z
+      .string()
+      .min(8, t("validation.passwordMin"))
+      .regex(passwordRule, t("validation.passwordComplexity")),
+    phone: z.string().trim().optional()
+  });
+}
 
-type RegisterFormValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = z.infer<ReturnType<typeof createRegisterSchema>>;
 
 export function RegisterPage() {
+  const { t } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
+  const registerSchema = createRegisterSchema(t);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const {
@@ -87,14 +92,14 @@ export function RegisterPage() {
         </div>
         <form className="form-stack" onSubmit={onSubmit}>
           <Input
-            label="Full name"
+            label={t("common.fullName")}
             autoComplete="name"
             placeholder="Nguyen Van A"
             error={errors.fullName?.message}
             {...register("fullName")}
           />
           <Input
-            label="Email"
+            label={t("common.email")}
             type="email"
             autoComplete="email"
             placeholder="agent@example.com"
@@ -102,7 +107,7 @@ export function RegisterPage() {
             {...register("email")}
           />
           <Input
-            label="Phone"
+            label={t("common.phone")}
             type="tel"
             autoComplete="tel"
             placeholder="0900000000"
@@ -120,7 +125,7 @@ export function RegisterPage() {
           {formError ? <p className="form-alert">{formError}</p> : null}
           {successMessage ? <p className="form-success">{successMessage}</p> : null}
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating account..." : "Create account"}
+            {isSubmitting ? t("actions.creatingAccount") : t("actions.createAccount")}
           </Button>
           <Button asChild variant="ghost">
             <Link to="/login">Already have an account</Link>
