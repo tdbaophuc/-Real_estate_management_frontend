@@ -2,6 +2,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
+import { Building2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
 import { authApi } from "../../shared/auth/authApi";
@@ -9,6 +10,7 @@ import { useAuth } from "../../shared/auth/useAuth";
 import { normalizeUnknownError } from "../../shared/api/errors";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
+import { useText } from "../../shared/i18n/useText";
 
 const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/;
 
@@ -28,6 +30,7 @@ type RegisterFormValues = z.infer<ReturnType<typeof createRegisterSchema>>;
 
 export function RegisterPage() {
   const { t } = useTranslation();
+  const tx = useText();
   const { login } = useAuth();
   const navigate = useNavigate();
   const registerSchema = createRegisterSchema(t);
@@ -86,9 +89,14 @@ export function RegisterPage() {
   return (
     <section className="auth-page">
       <div className="auth-panel">
-        <div>
-          <p className="eyebrow">Create account</p>
-          <h1>Register your real estate workspace account</h1>
+        <div className="auth-heading">
+          <span className="brand-mark">
+            <Building2 size={22} />
+          </span>
+          <div>
+            <p className="eyebrow">{tx("Create account")}</p>
+            <h1>{tx("Register your real estate workspace account")}</h1>
+          </div>
         </div>
         <form className="form-stack" onSubmit={onSubmit}>
           <Input
@@ -128,7 +136,7 @@ export function RegisterPage() {
             {isSubmitting ? t("actions.creatingAccount") : t("actions.createAccount")}
           </Button>
           <Button asChild variant="ghost">
-            <Link to="/login">Already have an account</Link>
+            <Link to="/login">{tx("Already have an account")}</Link>
           </Button>
         </form>
       </div>
