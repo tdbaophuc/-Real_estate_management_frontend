@@ -8297,12 +8297,28 @@ p {
   background: #e7f7ef;
 }
 
-.auth-demo {
+.auth-footer {
   display: grid;
   gap: 12px;
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
+}
+
+.auth-switch {
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 650;
+}
+
+.auth-switch a {
+  color: var(--secondary);
+  font-weight: 800;
+}
+
+.auth-switch a:hover {
+  text-decoration: underline;
 }
 
 .app-layout {
